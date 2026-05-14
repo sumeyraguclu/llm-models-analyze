@@ -1,0 +1,22 @@
+# Render Blueprint — Git repo kökü SADECE `project/` klasörüyse bu dosyayı kullanın.
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: automl-agent-api
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: LLM_PROVIDER
+        value: mock
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

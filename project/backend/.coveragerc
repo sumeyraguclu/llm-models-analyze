@@ -1,0 +1,12 @@
+[run]
+source = .
+omit =
+    tests/*
+    */myvenv/*
+    */site-packages/*
+
+[report]
+omit =
+    tests/*
+    */myvenv/*
+    */site-packages/*

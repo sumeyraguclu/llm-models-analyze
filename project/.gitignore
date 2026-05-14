@@ -1,0 +1,30 @@
+# Yerel sırlar — asla commit etmeyin
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Yerel Python ortamı (backend klasörü içinde oluşturulduysa)
+myvenv/
+.venv/
+venv/
+
+# Yapay zeka / IDE yerel verileri (oturum, token, önbellek, kişisel yollar)
+.agents/
+.claude/
+.vscode/
+
+# Node / Vite
+frontend/node_modules/
+**/node_modules/
+
+# Python
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.eggs/
+dist/
+build/

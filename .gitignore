@@ -1,0 +1,10 @@
+# Repo kökü (project üstü) — aynı isimli klasörler burada oluşursa commitlenmesin
+.agents/
+.claude/
+.vscode/
+.cursor/
+
+# Yerel Python ortamı (repo kökünde ise)
+myvenv/
+.venv/
+venv/
