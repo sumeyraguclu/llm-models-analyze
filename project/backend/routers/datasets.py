@@ -9,7 +9,7 @@ import database
 from database import get_db
 from models import Dataset, PlanSnapshot
 from services.analysis_plan_generation import generate_validated_analysis_plan
-from validation.ecommerce_rules import validate_ecommerce_dataframe
+from validation.dispatch import validate_dataframe
 from validation.quality_score import compute_quality_score
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
@@ -115,7 +115,7 @@ def get_dataset_validation(
     dataset_id: int,
     template: str = Query(
         "churn",
-        description="Şablon kimliği (eşik ve yeterlilik metinleri buna göre): churn | segmentasyon | satis_tahmini",
+        description="Şablon: churn | segmentasyon | satis_tahmini | uplift",
     ),
     db: Session = Depends(get_db),
 ):
@@ -132,7 +132,7 @@ def get_dataset_validation(
     if df.empty:
         raise HTTPException(status_code=400, detail="Dataset tablosu boş.")
 
-    report = validate_ecommerce_dataframe(df, template=template)
+    report = validate_dataframe(df, template=template)
     return report.model_dump()
 
 
@@ -155,6 +155,6 @@ def get_dataset_quality(
     if df.empty:
         raise HTTPException(status_code=400, detail="Dataset tablosu boş.")
 
-    vr = validate_ecommerce_dataframe(df, template=template)
-    quality = compute_quality_score(vr.metrics)
+    vr = validate_dataframe(df, template=template)
+    quality = compute_quality_score(vr.metrics, template=template)
     return quality.model_dump()

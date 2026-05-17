@@ -8,6 +8,7 @@ from templates.base import MlTemplate
 from templates.churn import ChurnTemplate
 from templates.sales_forecast import SalesForecastTemplate
 from templates.segmentation import SegmentationTemplate
+from templates.uplift import UpliftTemplate
 
 _REGISTRY: dict[str, MlTemplate] | None = None
 
@@ -19,6 +20,7 @@ def _ensure_registry() -> dict[str, MlTemplate]:
             ChurnTemplate(),
             SegmentationTemplate(),
             SalesForecastTemplate(),
+            UpliftTemplate(),
         ]
         _REGISTRY = {t.name: t for t in instances}
     return _REGISTRY
