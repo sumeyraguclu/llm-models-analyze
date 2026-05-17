@@ -14,6 +14,7 @@ def test_list_template_names_sorted():
     assert "churn" in names
     assert "segmentasyon" in names
     assert "satis_tahmini" in names
+    assert "uplift" in names
 
 
 def test_get_template_execution_dict_churn():
@@ -25,7 +26,15 @@ def test_get_template_execution_dict_churn():
 
 def test_get_template_spec_unknown():
     with pytest.raises(ValueError, match="Bilinmeyen"):
-        get_template_spec("uplift")
+        get_template_spec("not_a_template")
+
+
+def test_uplift_template_registered():
+    names = list_template_names()
+    assert "uplift" in names
+    spec = get_template_spec("uplift")
+    assert spec.dataset_type == "customer_level_campaign_data"
+    assert "two_model_uplift" in spec.supported_models
 
 
 def test_ensure_template_registered_rejects_unknown():
@@ -35,7 +44,7 @@ def test_ensure_template_registered_rejects_unknown():
 
 def test_validated_plan_rejects_unknown_template_in_payload():
     raw = {
-        "template": "uplift",
+        "template": "not_a_template",
         "column_map": {"customer_id": "c"},
         "cleaning_steps": ["drop_rows_missing_customer_id"],
         "feature_plan": ["build_customer_rfm_features"],
@@ -43,6 +52,22 @@ def test_validated_plan_rejects_unknown_template_in_payload():
     with pytest.raises(AnalysisExecutionError) as ei:
         validated_plan_from_snapshot_payload(raw)
     assert ei.value.detail.get("error") == "unknown_template"
+
+
+def test_validated_plan_accepts_uplift():
+    raw = {
+        "template": "uplift",
+        "column_map": {
+            "customer_id": "CustomerID",
+            "treatment": "CampaignSent",
+            "outcome": "Purchased",
+        },
+        "cleaning_steps": [],
+        "feature_plan": ["build_uplift_customer_features"],
+    }
+    tmpl, _cm, plan = validated_plan_from_snapshot_payload(raw)
+    assert tmpl == "uplift"
+    assert plan.feature_plan == ["build_uplift_customer_features"]
 
 
 def test_validate_ecommerce_respects_template_thresholds():

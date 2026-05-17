@@ -29,7 +29,7 @@ LLM çıktısı her zaman **Pydantic şeması** ve ek kurallarla (`services/anal
 
 - **`templates/base.MlTemplate`**: Şablon sözleşmesi — `minimum_rows` / `recommended_rows`, `to_execution_dict()` (eski `TEMPLATES` sözlüğü ile uyumlu), `build_pipeline(validated_plan)`, plan adımları için `validate_plan_steps()`, metrik sonrası `postprocess_metrics()`, validation eşikleri (`validation_recommended_*`, `compute_training_data_sufficient`).
 - **`templates/registry.py`**: `get_template(name)` (dict), `get_template_spec(name)` (nesne), `ensure_template_registered()`, `list_template_names()`. **Kayıtlı olmayan şablon** (ör. gelecekteki `uplift`) LLM çıktısında bile çalıştırılamaz.
-- **`templates/churn.py`**, **`segmentation.py`**, **`sales_forecast.py`**: Şablona özgü ham kolon beklentisi, pipeline kurulumu ve churn oranı uyarıları (churn) burada toplanır.
+- **`templates/churn.py`**, **`segmentation.py`**, **`sales_forecast.py`**, **`uplift.py`**: Şablona özgü pipeline. **Uplift MVP:** `features/uplift_features.build_uplift_customer_features` + `ml/uplift.UpliftPipeline` (T-Learner, sklearn). Customer-level campaign verisi; transaction-level ve causal iddia yok.
 - **`schemas/analysis_plan.py`**: `VALID_TEMPLATES` artık `list_template_names()` ile registry’den türetilir — tek kaynak.
 - **`ml/templates.py`**: Geriye dönük import; yeni kod `templates.registry` kullanmalı.
 
@@ -37,8 +37,8 @@ LLM çıktısı her zaman **Pydantic şeması** ve ek kurallarla (`services/anal
 
 ## Backend validation
 
-- `GET /datasets/{dataset_id}/validation`: `validation/ecommerce_rules.py` — kolon eşleştirme, null oranları, tarih parse, duplicate, iş kuralları. **LLM kullanmaz.** İsteğe bağlı query: **`template`** (`churn` \| `segmentasyon` \| `satis_tahmini`); öneri eşikleri ve `churn_data_sufficient` hesabı seçilen şablona göre değişir (API alanı adı geriye dönük).
-- `GET /datasets/{dataset_id}/quality`: Aynı `template` parametresi ile validation metrikleri üzerinden `validation/quality_score.py` skoru.
+- `GET /datasets/{dataset_id}/validation`: `validation/dispatch.py` — `churn`/`segmentasyon`/`satis_tahmini` için `ecommerce_rules.py`; **`uplift`** için `uplift_rules.py` (treatment/outcome/grup dengesi). **LLM kullanmaz.** Query: **`template`**.
+- `GET /datasets/{dataset_id}/quality`: Aynı `template` ile `compute_quality_score` (uplift için ayrı ağırlıklar: treatment/outcome/group_balance).
 - `schemas/analysis_plan.py`: plan JSON şeması; bilinmeyen `cleaning_steps` / `feature_plan` / **kayıtlı olmayan template** reddedilir.
 
 ---

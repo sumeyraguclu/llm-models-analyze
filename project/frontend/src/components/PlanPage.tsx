@@ -7,11 +7,12 @@ import { Badge, Button, Card, Divider, Skeleton, Spinner } from "./ui";
 interface PlanPageProps {
   datasetId: number;
   tableName: string;
+  userGoal?: string;
   onApprove: (planId: number, plan: AnalysisPlan) => void;
   onBack: () => void;
 }
 
-export default function PlanPage({ datasetId, tableName, onApprove, onBack }: PlanPageProps) {
+export default function PlanPage({ datasetId, tableName, userGoal, onApprove, onBack }: PlanPageProps) {
   const [planId, setPlanId] = useState<number | null>(null);
   const [plan, setPlan] = useState<AnalysisPlan | null>(null);
   const [mappingConfidence, setMappingConfidence] = useState<Record<string, unknown> | null>(null);
@@ -24,7 +25,7 @@ export default function PlanPage({ datasetId, tableName, onApprove, onBack }: Pl
     setLoading(true);
     setError(null);
     try {
-      const res = await createPlanSnapshot(datasetId);
+      const res = await createPlanSnapshot(datasetId, userGoal);
       setPlanId(res.plan_id);
       setPlan(res.plan);
       setMappingConfidence(res.mapping_confidence ?? null);
@@ -106,6 +107,15 @@ export default function PlanPage({ datasetId, tableName, onApprove, onBack }: Pl
 
       {!loading && plan && (
         <div className="space-y-4">
+          {(plan.template === "uplift" || plan.recommended_template === "uplift") && (
+            <Card className="border-accent/30 bg-accent/5">
+              <p className="text-sm text-text">
+                <strong>Uplift</strong>, kampanya gönderilen ve gönderilmeyen grupları karşılaştırarak kampanyanın ek
+                etkisini tahmin eder. Bu MVP customer-level campaign verisi içindir; causal inference iddiası yoktur.
+              </p>
+            </Card>
+          )}
+
           <Card hover>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -242,7 +252,42 @@ export default function PlanPage({ datasetId, tableName, onApprove, onBack }: Pl
             </ul>
           </Card>
 
-          {plan.options && plan.template === "churn" && (
+          {plan.options &&
+            (plan.template === "uplift" || plan.recommended_template === "uplift") &&
+            !("churn_strategy" in plan.options) && (
+              <Card>
+                <h2 className="text-lg font-semibold">Uplift seçenekleri</h2>
+                <Divider className="my-4" />
+                <div className="space-y-2 text-sm text-text">
+                  {"model_type" in plan.options && (
+                    <p>
+                      <span className="text-muted">model_type: </span>
+                      {String((plan.options as Record<string, unknown>).model_type)}
+                    </p>
+                  )}
+                  {"min_group_size" in plan.options && (
+                    <p>
+                      <span className="text-muted">min_group_size: </span>
+                      {String((plan.options as Record<string, unknown>).min_group_size)}
+                    </p>
+                  )}
+                  {"treatment_positive_value" in plan.options && (
+                    <p>
+                      <span className="text-muted">treatment_positive_value: </span>
+                      {String((plan.options as Record<string, unknown>).treatment_positive_value)}
+                    </p>
+                  )}
+                  {"outcome_positive_value" in plan.options && (
+                    <p>
+                      <span className="text-muted">outcome_positive_value: </span>
+                      {String((plan.options as Record<string, unknown>).outcome_positive_value)}
+                    </p>
+                  )}
+                </div>
+              </Card>
+            )}
+
+          {plan.options && plan.template === "churn" && "churn_strategy" in plan.options && (
             <Card>
               <h2 className="text-lg font-semibold">Seçenekler</h2>
               <Divider className="my-4" />

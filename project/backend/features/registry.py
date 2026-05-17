@@ -156,7 +156,10 @@ def build_customer_rfm_features(df: pd.DataFrame, column_map: dict, options: dic
     return out
 
 
+from features.uplift_features import build_uplift_customer_features
+
 FEATURE_REGISTRY = {
     "build_customer_rfm_features": build_customer_rfm_features,
+    "build_uplift_customer_features": build_uplift_customer_features,
 }
 

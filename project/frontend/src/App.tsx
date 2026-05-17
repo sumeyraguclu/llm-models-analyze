@@ -10,8 +10,8 @@ import UploadPage from "./components/UploadPage";
 
 type AppState =
   | { stage: "upload" }
-  | { stage: "dataset"; datasetId: number; tableName: string }
-  | { stage: "plan"; datasetId: number; tableName: string }
+  | { stage: "dataset"; datasetId: number; tableName: string; preferredTemplate?: string }
+  | { stage: "plan"; datasetId: number; tableName: string; preferredTemplate?: string; planUserGoal?: string }
   | { stage: "jobRun"; datasetId: number; planId: number; plan: AnalysisPlan }
   | {
       stage: "result";
@@ -40,8 +40,13 @@ export default function App() {
 
         {state.stage === "upload" && (
           <UploadPage
-            onReady={({ ingest }) =>
-              setState({ stage: "dataset", datasetId: ingest.dataset_id, tableName: ingest.table_name })
+            onReady={({ ingest, demoScenario }) =>
+              setState({
+                stage: "dataset",
+                datasetId: ingest.dataset_id,
+                tableName: ingest.table_name,
+                preferredTemplate: demoScenario === "uplift" ? "uplift" : "churn",
+              })
             }
           />
         )}
@@ -50,8 +55,18 @@ export default function App() {
           <DatasetPage
             datasetId={state.datasetId}
             tableName={state.tableName}
+            initialTemplate={state.preferredTemplate ?? "churn"}
             onStartAnalysis={() =>
-              setState({ stage: "plan", datasetId: state.datasetId, tableName: state.tableName })
+              setState({
+                stage: "plan",
+                datasetId: state.datasetId,
+                tableName: state.tableName,
+                preferredTemplate: state.preferredTemplate,
+                planUserGoal:
+                  state.preferredTemplate === "uplift"
+                    ? "uplift campaign CampaignSent Purchased customer_level"
+                    : undefined,
+              })
             }
           />
         )}
@@ -79,10 +94,18 @@ export default function App() {
           <PlanPage
             datasetId={state.datasetId}
             tableName={state.tableName}
+            userGoal={state.planUserGoal}
             onApprove={(planId, plan) =>
               setState({ stage: "jobRun", datasetId: state.datasetId, planId, plan })
             }
-            onBack={() => setState({ stage: "dataset", datasetId: state.datasetId, tableName: state.tableName })}
+            onBack={() =>
+              setState({
+                stage: "dataset",
+                datasetId: state.datasetId,
+                tableName: state.tableName,
+                preferredTemplate: state.preferredTemplate,
+              })
+            }
           />
         )}
 

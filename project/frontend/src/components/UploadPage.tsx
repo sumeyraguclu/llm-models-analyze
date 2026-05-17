@@ -4,12 +4,19 @@ import { createProfile, ingestCsv, type IngestResponse, type ProfileResponse } f
 import { formatApiError } from "../api/errors";
 import { Button, Card, Spinner } from "./ui";
 
+export type DemoScenario = "churn" | "uplift";
+
 interface UploadPageProps {
-  onReady: (data: { ingest: IngestResponse; profile: ProfileResponse["profile"] }) => void;
+  onReady: (data: {
+    ingest: IngestResponse;
+    profile: ProfileResponse["profile"];
+    demoScenario?: DemoScenario;
+  }) => void;
 }
 
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
-const DEMO_CSV_URL = "/demo/ecommerce_good.csv";
+const DEMO_CHURN_URL = "/demo/ecommerce_good.csv";
+const DEMO_UPLIFT_URL = "/demo/uplift_campaign_demo.csv";
 
 export default function UploadPage({ onReady }: UploadPageProps) {
   const [file, setFile] = useState<File | null>(null);
@@ -17,8 +24,9 @@ export default function UploadPage({ onReady }: UploadPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [ingestDone, setIngestDone] = useState<IngestResponse | null>(null);
   const [profilePayload, setProfilePayload] = useState<ProfileResponse["profile"] | null>(null);
+  const [lastDemo, setLastDemo] = useState<DemoScenario | null>(null);
 
-  const runIngestAndProfile = async (csvFile: File) => {
+  const runIngestAndProfile = async (csvFile: File, demoScenario?: DemoScenario) => {
     if (csvFile.size > MAX_FILE_SIZE_BYTES) {
       setError("Dosya 100MB sınırını aşıyor.");
       return;
@@ -27,6 +35,7 @@ export default function UploadPage({ onReady }: UploadPageProps) {
     setError(null);
     setIngestDone(null);
     setProfilePayload(null);
+    setLastDemo(demoScenario ?? null);
     try {
       const ingest = await ingestCsv(csvFile);
       const profile = await createProfile(ingest.table_name);
@@ -46,21 +55,22 @@ export default function UploadPage({ onReady }: UploadPageProps) {
       return;
     }
     await runIngestAndProfile(file);
+    setLastDemo(null);
   };
 
-  const handleDemoCsv = async () => {
+  const loadDemo = async (url: string, filename: string, scenario: DemoScenario) => {
     setError(null);
     setFile(null);
     setLoading(true);
     try {
-      const res = await fetch(DEMO_CSV_URL);
+      const res = await fetch(url);
       if (!res.ok) {
-        throw new Error(`Demo dosyası yüklenemedi (${res.status}). public/demo/ecommerce_good.csv var mı?`);
+        throw new Error(`Demo dosyası yüklenemedi (${res.status}). public/demo/${filename} var mı?`);
       }
       const blob = await res.blob();
-      const demoFile = new File([blob], "ecommerce_good.csv", { type: "text/csv" });
+      const demoFile = new File([blob], filename, { type: "text/csv" });
       setFile(demoFile);
-      await runIngestAndProfile(demoFile);
+      await runIngestAndProfile(demoFile, scenario);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Demo CSV alınamadı.");
       console.error(err);
@@ -71,7 +81,7 @@ export default function UploadPage({ onReady }: UploadPageProps) {
 
   const handleContinue = () => {
     if (ingestDone && profilePayload != null) {
-      onReady({ ingest: ingestDone, profile: profilePayload });
+      onReady({ ingest: ingestDone, profile: profilePayload, demoScenario: lastDemo ?? undefined });
     }
   };
 
@@ -81,21 +91,34 @@ export default function UploadPage({ onReady }: UploadPageProps) {
       <div className="mb-6">
         <h1 className="text-3xl font-semibold tracking-tight">E‑ticaret CSV → doğrulama, plan, job, ML sonuç</h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-          Bu sayfa portföy demosudur: veriyi yükleyin, kaliteyi görün, LLM planını onaylayın, arka planda job çalışsın, metrik ve açıklamayı
-          alın. Üstteki <strong className="text-text">1→9</strong> sırasını izlemeniz yeterli.
+          İki portföy demosu: <strong className="text-text">Churn</strong> (işlem satırları) veya{" "}
+          <strong className="text-text">Uplift</strong> (kampanya müşteri satırları). Üstteki 1→9 sırasını izleyin.
         </p>
         <p className="mt-2 text-xs text-muted">
-          API: <code>POST /ingest/csv</code> (<code>csv_file</code>) → <code>POST /profile/&#123;table_name&#125;</code>
+          API: <code>POST /ingest/csv</code> → <code>POST /profile/&#123;table_name&#125;</code>
         </p>
       </div>
 
       <Card className="mx-auto max-w-xl">
         <h2 className="text-xl font-semibold">1. Dataset yükle</h2>
-        <p className="mt-1 text-sm text-muted">Hızlı demo için aşağıdaki buton; veya kendi CSV’niz. Maks. 100MB.</p>
+        <p className="mt-1 text-sm text-muted">Demo seçin veya kendi CSV’nizi yükleyin. Maks. 100MB.</p>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button type="button" variant="ghost" onClick={handleDemoCsv} disabled={loading}>
-            Demo: ecommerce_good.csv
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => loadDemo(DEMO_CHURN_URL, "ecommerce_good.csv", "churn")}
+            disabled={loading}
+          >
+            Ecommerce Churn Demo
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => loadDemo(DEMO_UPLIFT_URL, "uplift_campaign_demo.csv", "uplift")}
+            disabled={loading}
+          >
+            Uplift Campaign Demo
           </Button>
         </div>
 
@@ -108,6 +131,7 @@ export default function UploadPage({ onReady }: UploadPageProps) {
               setFile(event.target.files?.[0] ?? null);
               setIngestDone(null);
               setProfilePayload(null);
+              setLastDemo(null);
             }}
           />
         </div>
@@ -129,6 +153,12 @@ export default function UploadPage({ onReady }: UploadPageProps) {
         {ingestDone && profilePayload != null && (
           <div className="mt-6 rounded-lg border border-success/30 bg-success/5 p-4">
             <p className="text-sm font-medium text-text">Yükleme tamam</p>
+            {lastDemo && (
+              <p className="mt-1 text-xs text-muted">
+                Demo senaryo: <strong className="text-text">{lastDemo === "uplift" ? "Uplift Campaign" : "Churn"}</strong>
+                {lastDemo === "uplift" && " — sonraki adımda şablon olarak uplift seçin."}
+              </p>
+            )}
             <ul className="mt-2 space-y-1 font-mono text-xs text-muted">
               <li>
                 <span className="text-text">dataset_id:</span> {ingestDone.dataset_id}

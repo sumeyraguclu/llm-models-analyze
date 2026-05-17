@@ -1,12 +1,12 @@
 # AutoML Agent — Portfolio
 
-E‑ticaret işlem CSV’lerinden **kolon eşleştirme**, **veri doğrulama**, **LLM destekli analysis plan**, **onaylı plan ile güvenli feature pipeline** ve **şablon kayıtlı (template-driven) ML** üreten tam yığın demo. Şablonlar: **churn**, **segmentasyon**, **satış tahmini** (`project/backend/templates/`).
+E‑ticaret işlem CSV’lerinden **kolon eşleştirme**, **veri doğrulama**, **LLM destekli analysis plan**, **onaylı plan ile güvenli feature pipeline** ve **şablon kayıtlı (template-driven) ML** üreten tam yığın demo. Şablonlar: **churn**, **segmentasyon**, **satış tahmini**, **uplift** (foundation) (`project/backend/templates/`).
 
 | Bileşen | Konum |
 |---------|--------|
 | Backend (FastAPI) | `project/backend/` |
 | Frontend (Vite + React + demo akışı) | `project/frontend/` |
-| Demo CSV (repo) | `project/datasets/demo/` + `project/frontend/public/demo/` (UI “Demo CSV” butonu) |
+| Demo CSV (repo) | `project/datasets/demo/` + `project/frontend/public/demo/` (Churn + Uplift demo butonları) |
 | Dokümantasyon | `project/docs/` |
 
 ---
@@ -50,8 +50,8 @@ Tarayıcı: `http://localhost:5173` — üstteki **1→9** şeridi ve sayfa baş
 
 | Adım | Kullanıcı aksiyonu |
 |------|---------------------|
-| 1 | CSV seç veya **“Demo: ecommerce_good.csv”** — `public/demo/` içindeki dosyayı yükler; ardından **profil** çağrılır. |
-| 2–4 | Önizleme tablosu + kolon listesi; **validation** ve **quality** (şablon seçici; varsayılan `churn`). |
+| 1 | **Ecommerce Churn Demo** veya **Uplift Campaign Demo** (veya kendi CSV); ardından profil. |
+| 2–4 | Önizleme tablosu + kolon listesi; **validation** ve **quality** (şablon seçici; varsayılan `churn`; uplift kampanya verisi için `?template=uplift`). |
 | 5–6 | Plan oluşturulur (`POST /datasets/{id}/plans`); **Planı onayla** (`POST /plans/{id}/approve`). |
 | 7–8 | **Job başlat** → polling → **sonuç** (`/plans/.../jobs`, `/jobs/...`, `/jobs/.../result`). |
 | 9 | Sonuç ekranında metrikler; sağda **Explain** (`POST /agent/explain`, otomatik + Yenile). |
@@ -132,9 +132,17 @@ Ham CSV’ler farklı kolon adları ve kalite sorunları taşır. Bu projede:
 
 ---
 
+## Uplift (MVP)
+
+- Şablon: `uplift` — **customer-level campaign** satırları (`customer_id`, `treatment`, `outcome`).
+- Feature: `build_uplift_customer_features` → T-Learner (`ml/uplift.py`, LogisticRegression × 2).
+- Validation/quality: `?template=uplift`
+- Demo CSV: `project/datasets/demo/uplift_campaign_demo.csv`
+- **Sınırlar:** transaction-level uplift yok; causal inference iddiası yok; MVP T-Learner.
+
 ## Roadmap (öneri)
 
-- Uplift vb.: `MlTemplate` + `templates/registry.py`  
+- Uplift: causal forest / propensity scoring, transaction-level  
 - Alembic migration’ları  
 - İsteğe bağlı job kuyruğu (RQ/Celery)  
 - Daha zengin segmentasyon / satış tahmini UI testleri

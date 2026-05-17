@@ -4,16 +4,24 @@ export interface ChurnOptions {
   churn_quantile: number;
 }
 
+export interface UpliftOptions {
+  treatment_positive_value?: number;
+  outcome_positive_value?: number;
+  min_group_size?: number;
+  min_outcome_rate?: number;
+  model_type?: "t_learner" | "two_model_uplift";
+}
+
 export interface AnalysisPlan {
   /** Normalize edilmiş şablon; LLM ham çıktısında `recommended_template` de gelebilir. */
-  template: string; // "churn" | "satis_tahmini" | "segmentasyon"
+  template: string; // "churn" | "uplift" | "satis_tahmini" | "segmentasyon"
   recommended_template?: string;
   column_map: Record<string, string>; // standart alan adı → CSV kolon adı
   cleaning_steps: string[];
   /** Bazı yanıtlarda `cleaning_plan` adıyla gelebilir; UI `cleaning_steps` ile birleştirir. */
   cleaning_plan?: string[];
   feature_plan: string[];
-  options?: ChurnOptions;
+  options?: ChurnOptions | UpliftOptions;
   reasoning?: string;
   /** @deprecated Sunucu artık insufficient_data ile plan döndürmez; uyumluluk için bırakıldı. */
   insufficient_data?: boolean;

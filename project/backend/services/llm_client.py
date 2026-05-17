@@ -19,6 +19,40 @@ def _env(name: str, default: str | None = None) -> str | None:
     return value if value != "" else default
 
 
+def _mock_uplift_plan() -> str:
+    plan = {
+        "dataset_type": "customer_level_campaign_data",
+        "recommended_template": "uplift",
+        "template": "uplift",
+        "column_map": {
+            "customer_id": "CustomerID",
+            "treatment": "CampaignSent",
+            "outcome": "Purchased",
+            "campaign_date": "CampaignDate",
+            "revenue": "Revenue",
+            "channel": "Channel",
+            "recency": "Recency",
+            "frequency": "Frequency",
+            "monetary": "Monetary",
+        },
+        "cleaning_plan": [],
+        "feature_plan": ["build_uplift_customer_features"],
+        "options": {
+            "model_type": "t_learner",
+            "min_group_size": 50,
+            "treatment_positive_value": 1,
+            "outcome_positive_value": 1,
+            "min_outcome_rate": 0.01,
+        },
+        "confidence": 0.85,
+        "requires_user_confirmation": False,
+        "missing_required_columns": [],
+        "warnings": [],
+        "reasoning": "Mock uplift plan: kampanya/treatment + outcome kolonları, T-Learner MVP.",
+    }
+    return json.dumps(plan, ensure_ascii=False)
+
+
 def _mock_plan() -> str:
     plan = {
         "dataset_type": "ecommerce_transactions",
@@ -262,6 +296,15 @@ def call_llm(
         up = (user_prompt or "").lower()
         if "key_findings" in sp or "explain" in up or "açıkla" in up:
             return _mock_explain()
+        up_compact = up.replace(" ", "").lower()
+        uplift_hints = (
+            "campaignsent" in up_compact
+            or "campaign_sent" in up.lower()
+            or ("purchased" in up.lower() and "campaign" in up.lower())
+            or (_env("MOCK_UPLIFT_TEMPLATE") or "").lower() in ("1", "true", "yes")
+        )
+        if uplift_hints:
+            return _mock_uplift_plan()
         return _mock_plan()
     if provider == "ollama":
         return _call_ollama(system_prompt, user_prompt)

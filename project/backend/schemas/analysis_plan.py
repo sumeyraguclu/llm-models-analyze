@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, field_validator, model_validator
 from typing_extensions import Self
@@ -11,6 +11,7 @@ from templates.registry import list_template_names
 
 VALID_TEMPLATES = list(list_template_names())
 VALID_CHURN_STRATEGIES = ["fixed_days", "quantile"]
+UPLIFT_REQUIRED_COLUMN_MAP = ("customer_id", "treatment", "outcome")
 
 
 class ChurnOptions(BaseModel):
@@ -33,12 +34,34 @@ class ChurnOptions(BaseModel):
         return v
 
 
+class UpliftOptions(BaseModel):
+    treatment_positive_value: int | float = 1
+    outcome_positive_value: int | float = 1
+    min_group_size: int = 50
+    min_outcome_rate: float = 0.01
+    model_type: Literal["t_learner", "two_model_uplift"] = "t_learner"
+
+    @field_validator("min_group_size")
+    @classmethod
+    def min_group_positive(cls, v: int):
+        if v < 1:
+            raise ValueError("min_group_size en az 1 olmalı")
+        return v
+
+    @field_validator("min_outcome_rate")
+    @classmethod
+    def min_rate_range(cls, v: float):
+        if v < 0.0 or v > 1.0:
+            raise ValueError("min_outcome_rate 0.0-1.0 arasında olmalı")
+        return v
+
+
 class AnalysisPlanSchema(BaseModel):
     template: str
     column_map: dict[str, str]
     cleaning_steps: list[str] = []
     feature_plan: list[str] = []
-    options: Optional[ChurnOptions] = None
+    options: Optional[Union[ChurnOptions, UpliftOptions]] = None
     reasoning: Optional[str] = None
     dataset_type: Optional[str] = None
     confidence: float = 0.0
@@ -84,22 +107,62 @@ class AnalysisPlanSchema(BaseModel):
             )
         return v
 
-    @field_validator("feature_plan")
-    @classmethod
-    def valid_feature_plan(cls, v: list[str]):
-        unknown = [f for f in v if f not in FEATURE_REGISTRY]
+    @model_validator(mode="after")
+    def feature_plan_by_template(self) -> Self:
+        if self.template == "uplift":
+            unknown = [f for f in self.feature_plan if f not in FEATURE_REGISTRY]
+            if unknown:
+                raise ValueError(
+                    f"Bilinmeyen feature plan: {unknown}. Geçerli: build_uplift_customer_features"
+                )
+            if len(self.feature_plan) > 1:
+                raise ValueError("uplift feature_plan en fazla 1 adım içerebilir")
+            if len(self.feature_plan) == 1 and self.feature_plan[0] != "build_uplift_customer_features":
+                raise ValueError("uplift feature_plan: build_uplift_customer_features olmalı")
+            return self
+
+        unknown = [f for f in self.feature_plan if f not in FEATURE_REGISTRY]
         if unknown:
             raise ValueError(
                 f"Bilinmeyen feature plan adımları: {unknown}. Geçerliler: {list(FEATURE_REGISTRY.keys())}"
             )
-        if len(v) > 1:
+        if len(self.feature_plan) > 1:
             raise ValueError("feature_plan şimdilik en fazla 1 adım içerebilir")
-        return v
+        return self
 
     @model_validator(mode="after")
-    def options_required_for_churn(self) -> Self:
+    def options_required_for_template(self) -> Self:
         if self.template == "churn" and self.options is None:
             self.options = ChurnOptions()
+        if self.template == "uplift":
+            if self.options is None:
+                self.options = UpliftOptions()
+            elif isinstance(self.options, dict):
+                self.options = UpliftOptions.model_validate(self.options)
+            elif not isinstance(self.options, UpliftOptions):
+                self.options = UpliftOptions.model_validate(
+                    self.options.model_dump() if hasattr(self.options, "model_dump") else self.options
+                )
+            if not self.feature_plan:
+                self.feature_plan = ["build_uplift_customer_features"]
+        return self
+
+    @model_validator(mode="after")
+    def uplift_required_column_map(self) -> Self:
+        if self.template != "uplift":
+            return self
+        if self.missing_required_columns:
+            return self
+        missing = [
+            k
+            for k in UPLIFT_REQUIRED_COLUMN_MAP
+            if k not in self.column_map or not str(self.column_map.get(k, "")).strip()
+        ]
+        if missing:
+            raise ValueError(
+                f"uplift column_map eksik zorunlu alanlar: {missing}. "
+                "Eksikse missing_required_columns kullanın."
+            )
         return self
 
     @model_validator(mode="after")
@@ -109,4 +172,3 @@ class AnalysisPlanSchema(BaseModel):
                 "column_map boşsa eksik zorunlu kolonları missing_required_columns içinde bildir"
             )
         return self
-

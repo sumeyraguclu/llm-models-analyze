@@ -5,9 +5,11 @@ import { getDatasetQuality, getDatasetValidation, getPreview } from "../api/clie
 import type { QualityScoreResponse, ValidationReport } from "../types";
 import { Button, Card, ProgressBar, Spinner } from "./ui";
 import ChatPanel from "./ChatPanel";
+import UpliftHelpText from "./UpliftHelpText";
 
 const TEMPLATE_OPTIONS = [
-  { value: "churn", label: "churn (varsayılan)" },
+  { value: "churn", label: "churn — müşteri kaybı (işlem satırları)" },
+  { value: "uplift", label: "uplift — kampanya etkisi (müşteri/kampanya satırı)" },
   { value: "segmentasyon", label: "segmentasyon" },
   { value: "satis_tahmini", label: "satis_tahmini" },
 ] as const;
@@ -15,11 +17,17 @@ const TEMPLATE_OPTIONS = [
 interface DatasetPageProps {
   datasetId: number;
   tableName: string;
+  initialTemplate?: string;
   onStartAnalysis: () => void;
 }
 
-export default function DatasetPage({ datasetId, tableName, onStartAnalysis }: DatasetPageProps) {
-  const [template, setTemplate] = useState<string>("churn");
+export default function DatasetPage({
+  datasetId,
+  tableName,
+  initialTemplate = "churn",
+  onStartAnalysis,
+}: DatasetPageProps) {
+  const [template, setTemplate] = useState<string>(initialTemplate);
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
   const [previewLoading, setPreviewLoading] = useState(true);
   const [vqLoading, setVqLoading] = useState(false);
@@ -121,6 +129,8 @@ export default function DatasetPage({ datasetId, tableName, onStartAnalysis }: D
         )}
       </div>
 
+      {template === "uplift" && <UpliftHelpText className="mb-4" />}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <h2 className="text-lg font-semibold">2. Önizleme</h2>
@@ -181,11 +191,13 @@ export default function DatasetPage({ datasetId, tableName, onStartAnalysis }: D
               </div>
               <p className="mt-2 text-xs text-muted">Alt bileşenler (0–100)</p>
               <ul className="mt-1 max-h-40 overflow-y-auto font-mono text-xs text-muted">
-                {Object.entries(quality.breakdown).map(([k, v]) => (
-                  <li key={k}>
-                    {k}: {typeof v === "number" ? v.toFixed(1) : String(v)}
-                  </li>
-                ))}
+                {Object.entries(quality.breakdown)
+                  .filter(([, v]) => v != null)
+                  .map(([k, v]) => (
+                    <li key={k}>
+                      {k}: {typeof v === "number" ? v.toFixed(1) : String(v)}
+                    </li>
+                  ))}
               </ul>
             </div>
           )}

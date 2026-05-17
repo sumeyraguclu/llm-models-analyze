@@ -27,6 +27,16 @@ _RECOGNIZED_STANDARD_TOKENS = frozenset(
         "category",
         "invoice_id",
         "price",
+        "treatment",
+        "outcome",
+        "campaign_date",
+        "event_date",
+        "revenue",
+        "channel",
+        "segment",
+        "recency",
+        "frequency",
+        "monetary",
     }
 )
 
@@ -153,6 +163,14 @@ def normalize_raw_analysis_plan_dict(raw: dict) -> dict:
         ds_type = None
     else:
         ds_type = ds_type.strip()
+
+    if template == "uplift":
+        if not feature_plan:
+            feature_plan = ["build_uplift_customer_features"]
+        if not cleaning_steps:
+            cleaning_steps = []
+        if not ds_type:
+            ds_type = "customer_level_campaign_data"
 
     conf_raw = raw.get("confidence", 0.0)
     try:

@@ -66,7 +66,7 @@ export async function getPreview(tableName: string, limit = 20): Promise<Preview
   return response.data;
 }
 
-/** GET /datasets/{id}/validation — `template`: churn | segmentasyon | satis_tahmini (varsayılan churn). */
+/** GET /datasets/{id}/validation — `template`: churn | uplift | segmentasyon | satis_tahmini (varsayılan churn). */
 export async function getDatasetValidation(datasetId: number, template = "churn"): Promise<ValidationReport> {
   const response = await api.get<ValidationReport>(`/datasets/${datasetId}/validation`, {
     params: { template },

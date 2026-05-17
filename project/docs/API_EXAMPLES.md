@@ -33,11 +33,14 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/profile/data_ab12cd34" -Method Pos
 
 **`GET /datasets/{dataset_id}/validation`**
 
-İsteğe bağlı query: **`template`** — `churn` (varsayılan) \| `segmentasyon` \| `satis_tahmini`. Öneri eşikleri ve `metrics.churn_data_sufficient` bu şablona göre hesaplanır.
+İsteğe bağlı query: **`template`** — `churn` (varsayılan) \| `segmentasyon` \| `satis_tahmini` \| **`uplift`**.
 
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/1/validation"
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/1/validation?template=segmentasyon"
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/ingest/csv" -Method Post `
+  -Form @{ csv_file = Get-Item "project\datasets\demo\uplift_campaign_demo.csv" }
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/1/validation?template=uplift"
 ```
 
 ---
@@ -186,6 +189,12 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/1"
 | POST | `/agent/analysis-plan` |
 
 ---
+
+## Uplift MVP notu
+
+- Plan: `template: "uplift"`, `feature_plan: ["build_uplift_customer_features"]`, `column_map`: customer_id, treatment, outcome (+ opsiyonel RFM/channel).
+- Job/analyze uplift planı ile **T-Learner** eğitir; metrikler: `average_uplift`, `uplift_by_decile`, `recommended_target_count`, vb.
+- **Sınırlar:** customer-level campaign CSV; transaction-level uplift yok; causal inference iddiası yok.
 
 ## TODO
 

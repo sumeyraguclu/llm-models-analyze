@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { explainModel, formatApiError } from "../api/client";
 import type { Explanation, ModelMetrics } from "../types";
+import UpliftHelpText from "./UpliftHelpText";
+import UpliftResultView from "./UpliftResultView";
 import { Badge, Button, Card, Spinner } from "./ui";
 
 interface ResultPageProps {
@@ -39,6 +41,23 @@ const METRIC_ENTRY_SKIP = new Set([
   "accuracy",
   "train_size",
   "test_size",
+  "treatment_conversion_rate",
+  "control_conversion_rate",
+  "average_uplift",
+  "top_decile_uplift",
+  "recommended_target_count",
+  "do_not_target_count",
+  "n_treatment",
+  "n_control",
+  "n_samples",
+  "uplift_by_decile",
+  "top_customers",
+  "warnings",
+  "feature_columns_used",
+  "model_type",
+  "uplift_score_min",
+  "uplift_score_max",
+  "low_priority_count",
 ]);
 
 export default function ResultPage({
@@ -55,11 +74,17 @@ export default function ResultPage({
   const [explainLoading, setExplainLoading] = useState(true);
   const [explainError, setExplainError] = useState<string | null>(null);
 
+  const isUplift = template === "uplift";
+  const upliftGoal =
+    isUplift && typeof m.average_uplift === "number"
+      ? `Uplift analizi: average_uplift=${m.average_uplift}, top_decile=${m.top_decile_uplift}, recommended_target=${m.recommended_target_count}`
+      : undefined;
+
   const loadExplain = useCallback(async () => {
     setExplainLoading(true);
     setExplainError(null);
     try {
-      const ex = await explainModel(modelId);
+      const ex = await explainModel(modelId, upliftGoal);
       setExplanation(ex);
     } catch (err) {
       setExplanation(null);
@@ -67,7 +92,7 @@ export default function ResultPage({
     } finally {
       setExplainLoading(false);
     }
-  }, [modelId]);
+  }, [modelId, upliftGoal]);
 
   useEffect(() => {
     void loadExplain();
@@ -162,9 +187,13 @@ export default function ResultPage({
         </Card>
       ) : null}
 
+      {isUplift && <UpliftHelpText className="mb-4" />}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
         <div className="space-y-4">
-          {segments && segments.length > 0 && (
+          {isUplift && <UpliftResultView metrics={metrics} />}
+
+          {!isUplift && segments && segments.length > 0 && (
             <Card>
               <h2 className="text-lg font-semibold">Segmentler ve önerilen aksiyonlar</h2>
               <p className="mt-1 text-sm text-muted">Hangi segmente ne yapmalıyım?</p>
@@ -221,6 +250,7 @@ export default function ResultPage({
             </Card>
           )}
 
+          {!isUplift && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {accuracy !== null && (
               <Card hover>
@@ -262,8 +292,9 @@ export default function ResultPage({
               );
             })}
           </div>
+          )}
 
-          {baselines && Object.keys(baselines).length > 0 && (
+          {!isUplift && baselines && Object.keys(baselines).length > 0 && (
             <Card>
               <h2 className="text-lg font-semibold">Baseline metrikleri</h2>
               <p className="mt-1 text-xs text-muted">Kural tabanlı kıyaslar (ör. majority class)</p>
@@ -278,7 +309,7 @@ export default function ResultPage({
             </Card>
           )}
 
-          {topFeatures && topFeatures.length > 0 && (
+          {!isUplift && topFeatures && topFeatures.length > 0 && (
             <Card>
               <h2 className="text-lg font-semibold">Özellik önemi (feature importance)</h2>
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-text">

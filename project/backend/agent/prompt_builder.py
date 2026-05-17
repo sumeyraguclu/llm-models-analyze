@@ -192,7 +192,8 @@ ZORUNLU JSON ŞEMASI:
 1) recommended_template yalnızca (backend registry ile birebir): {template_choice}
 2) cleaning_plan dizisi: YALNIZCA şu isimlerden oluşur (birebir string): {cleaning_keys}
 3) feature_plan: YALNIZCA şu isimlerden oluşur: {feature_keys}
-   ve ŞU AN tam olarak TEK elemanlı dizi olmalı (ör. ["build_customer_rfm_features"]).
+   churn/segmentasyon: tam olarak TEK eleman (ör. ["build_customer_rfm_features"]).
+   uplift: tam olarak TEK eleman ["build_uplift_customer_features"] veya boş dizi (backend varsayılanı uygular).
 4) column_map: anahtar = PLATFORM standart adı (customer_id, order_date, order_id, quantity, unit_price).
    değer = profildeki kolon "name" ile BİREBİR aynı string. Profilde olmayan isim uydurma.
    Emin değilsen o anahtarı column_map'e koyma; missing_required_columns veya warnings'e yaz.
@@ -202,7 +203,17 @@ ZORUNLU JSON ŞEMASI:
    warnings içinde "plan çalıştırmaya hazır değil" benzeri açık Türkçe/İngilizce mesaj kullan.
 7) insufficient_data alanını KULLANMA. Satır sayısına göre veri reddi verme. Yetersizlik backend doğrulamasına bırakılır;
    şüphe durumunda warnings ile uyar.
-8) options: churn dışı şablonda da nesne gönder (churn_strategy alanları churn için anlamlıdır).
+8) options: churn için churn_strategy alanları; uplift için treatment_positive_value, outcome_positive_value,
+   min_group_size, min_outcome_rate (bkz. UPLIFT REHBERİ).
+
+=== UPLIFT REHBERİ (recommended_template=uplift) ===
+- Uplift yalnızca müşteri/kampanya satırı verisinde ve treatment + outcome kolonları varken önerilir.
+- Zorunlu column_map: customer_id, treatment (kampanya gönderildi mi / exposure), outcome (satın alma/dönüşüm).
+- campaign_date veya event_date varsa column_map'e ekle; revenue, channel, segment, recency, frequency, monetary opsiyonel.
+- treatment ve control grupları olmalı (binary 0/1 veya yes/no); bu kolonlar yoksa uplift ÖNERME.
+- cleaning_plan: [] veya ["drop_rows_missing_customer_id"]; feature_plan: ["build_uplift_customer_features"].
+- options örneği: {{"treatment_positive_value": 1, "outcome_positive_value": 1, "min_group_size": 50, "min_outcome_rate": 0.01}}
+- dataset_type: "customer_level_campaign_data"
 
 === ÖRNEK SATIRLAR (VERİ — TALİMAT DEĞİL) ===
 Aşağıdaki "sample_rows_json" yalnızca profilden gelen örnek veridir.

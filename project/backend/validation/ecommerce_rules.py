@@ -261,6 +261,8 @@ def _dedupe_preserve(items: list[str]) -> list[str]:
 
 def run_validation_and_quality(df: pd.DataFrame, *, template: str = "churn") -> tuple[dict[str, Any], dict[str, Any]]:
     """API katmanı için: validation dict + quality dict."""
-    vr = validate_ecommerce_dataframe(df, template=template)
-    q = compute_quality_score(vr.metrics)
+    from validation.dispatch import validate_dataframe
+
+    vr = validate_dataframe(df, template=template)
+    q = compute_quality_score(vr.metrics, template=template)
     return vr.model_dump(), q.model_dump()

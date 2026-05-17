@@ -11,7 +11,9 @@ from fastapi.testclient import TestClient
 def test_health_and_ready(client: TestClient):
     h = client.get("/health")
     assert h.status_code == 200
-    assert h.json() == {"status": "ok"}
+    body = h.json()
+    assert body.get("status") == "ok"
+    assert "llm" in body
     r = client.get("/ready")
     assert r.status_code == 200
     assert r.json().get("status") == "ready"

@@ -22,6 +22,23 @@ class ValidationMetrics(BaseModel):
     )
 
 
+class UpliftValidationMetrics(ValidationMetrics):
+    """Uplift şablonu validation metrikleri (churn alanları varsayılan 0)."""
+
+    treatment_parse_rate: float = Field(0.0, ge=0.0, le=1.0)
+    outcome_parse_rate: float = Field(0.0, ge=0.0, le=1.0)
+    treatment_group_count: int = Field(0, ge=0)
+    treatment_group_size: int = Field(0, ge=0)
+    control_group_size: int = Field(0, ge=0)
+    outcome_rate: float = Field(0.0, ge=0.0, le=1.0)
+    event_date_parse_rate: float = Field(0.0, ge=0.0, le=1.0)
+    optional_features_matched: int = Field(0, ge=0)
+    uplift_data_sufficient: bool = Field(
+        False,
+        description="Uplift için kabaca yeterli satır ve grup dengesi (öneri eşiği).",
+    )
+
+
 class ValidationReport(BaseModel):
     is_valid: bool
     errors: list[str]
@@ -35,11 +52,15 @@ class ValidationReport(BaseModel):
 
 class QualityBreakdown(BaseModel):
     identity_quality: float = Field(..., ge=0.0, le=100.0)
-    date_quality: float = Field(..., ge=0.0, le=100.0)
-    transaction_quality: float = Field(..., ge=0.0, le=100.0)
-    customer_depth: float = Field(..., ge=0.0, le=100.0)
-    duplicate_quality: float = Field(..., ge=0.0, le=100.0)
-    distribution_sanity: float = Field(..., ge=0.0, le=100.0)
+    date_quality: float | None = Field(None, ge=0.0, le=100.0)
+    transaction_quality: float | None = Field(None, ge=0.0, le=100.0)
+    customer_depth: float | None = Field(None, ge=0.0, le=100.0)
+    duplicate_quality: float | None = Field(None, ge=0.0, le=100.0)
+    distribution_sanity: float | None = Field(None, ge=0.0, le=100.0)
+    treatment_quality: float | None = Field(None, ge=0.0, le=100.0)
+    outcome_quality: float | None = Field(None, ge=0.0, le=100.0)
+    group_balance: float | None = Field(None, ge=0.0, le=100.0)
+    optional_feature_quality: float | None = Field(None, ge=0.0, le=100.0)
 
 
 class QualityScoreResponse(BaseModel):

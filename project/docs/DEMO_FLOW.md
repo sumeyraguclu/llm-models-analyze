@@ -10,13 +10,21 @@ Bu doküman, projeyi **tarayıcıdan** veya **API ile** denemek içindir. Varsay
 
 | Sıra | Ne olur | Kullanılan uçlar |
 |-----|---------|------------------|
-| 1 | CSV: kendi dosyanız veya **“Demo: ecommerce_good.csv”** (Vite `public/demo/` dosyasını indirip yükler) | `POST /ingest/csv`, `POST /profile/{table_name}` |
-| 2–4 | Tablo önizlemesi; validation + quality; şablon seçici (`churn` varsayılan) | `GET /preview/...`, `GET /datasets/{id}/validation`, `GET /datasets/{id}/quality` |
+| 1 | CSV: **Ecommerce Churn Demo**, **Uplift Campaign Demo** veya kendi dosya | `POST /ingest/csv`, `POST /profile/{table_name}` |
+| 2–4 | Önizleme; validation + quality; şablon: `churn` \| `uplift` \| … | `GET /preview/...`, `GET /datasets/{id}/validation?template=…`, `GET /datasets/{id}/quality?template=…` |
 | 5–6 | Plan oluşturma (LLM + şema); içerik inceleme; **Planı onayla** | `POST /datasets/{id}/plans`, `POST /plans/{id}/approve` |
 | 7–8 | **Job başlat**; durum polling; tamamlanınca sonuç | `POST /plans/{id}/jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/result` |
 | 9 | Sonuç sayfasında metrikler; sağda **Explain** (otomatik + Yenile) | `POST /agent/explain` |
 
-**Demo CSV butonu:** Ek bir dosya seçmenize gerek kalmadan, repodaki `ecommerce_good.csv` ile aynı veriyi tarayıcıdan `FormData` ile gönderir (portföy demosu).
+**Demo butonları:** `public/demo/ecommerce_good.csv` (churn) ve `public/demo/uplift_campaign_demo.csv` (uplift). Uplift demosunda şablon olarak **uplift** seçin; plan mock’u kampanya kolonlarıyla uyumlu yanıt üretebilir (`LLM_PROVIDER=mock`).
+
+### Senaryo A — Churn Demo
+
+1. **Ecommerce Churn Demo** → şablon `churn` (varsayılan) → plan `build_customer_rfm_features` → job → accuracy / churn_rate.
+
+### Senaryo B — Uplift Campaign Demo
+
+1. **Uplift Campaign Demo** → şablon **uplift** → validation/quality uplift kuralları → plan `build_uplift_customer_features` → job → uplift metrikleri (average_uplift, decile, hedef sayıları).
 
 **Anahtarsız demo:** Backend `.env` içinde `LLM_PROVIDER=mock` — plan ve explain deterministik mock yanıtları kullanır (dış LLM çağrısı yok).
 
