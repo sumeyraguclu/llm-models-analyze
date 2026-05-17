@@ -108,3 +108,35 @@ def test_valid_plan_executes():
     assert "churn" in out.columns
     assert out["churn"].nunique() >= 2
     assert len(out) >= 10
+
+
+def test_historical_snapshot_fixed_days_produces_two_churn_classes():
+    """Online Retail gibi eski veride recency veri max tarihine göre hesaplanmalı."""
+    rows: list[dict] = []
+    for cid in range(1, 40):
+        for i in range(4):
+            rows.append(
+                {
+                    "Customer ID": float(cid),
+                    "InvoiceDate": f"2010-{1 + (cid % 10):02d}-{1 + i:02d} 10:00:00",
+                    "Invoice": f"INV-{cid}-{i}",
+                    "Quantity": 1,
+                    "Price": 5.0,
+                }
+            )
+    df = pd.DataFrame(rows)
+    plan = {
+        "column_map": {
+            "customer_id": "Customer ID",
+            "order_date": "InvoiceDate",
+            "order_id": "Invoice",
+            "quantity": "Quantity",
+            "unit_price": "Price",
+        },
+        "cleaning_plan": ["parse_order_date"],
+        "feature_plan": "build_customer_rfm_features",
+        "options": {"churn_strategy": "fixed_days", "churn_threshold_days": 90},
+    }
+    out = execute_analysis_plan(df, plan)
+    assert out["churn"].nunique() >= 2
+    assert out["recency_days"].max() < 4000

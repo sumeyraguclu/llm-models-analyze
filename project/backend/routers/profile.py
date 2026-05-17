@@ -1,5 +1,7 @@
 from itertools import combinations
 import logging
+import os
+import re
 import warnings
 
 import numpy as np
@@ -16,6 +18,27 @@ from models import Dataset
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Profil: tüm tabloyu RAM'e çekme (büyük CSV). row_count her zaman COUNT(*).
+_DEFAULT_PROFILE_SAMPLE_ROWS = 10000
+_DEFAULT_MAX_CORRELATION_COLUMNS = 20
+
+
+def _profile_sample_cap() -> int:
+    raw = int(os.getenv("PROFILE_SAMPLE_ROWS", str(_DEFAULT_PROFILE_SAMPLE_ROWS)))
+    return max(1, min(raw, 5_000_000))
+
+
+def _max_correlation_columns() -> int:
+    raw = int(os.getenv("MAX_CORRELATION_COLUMNS", str(_DEFAULT_MAX_CORRELATION_COLUMNS)))
+    return max(2, min(raw, 512))
+
+
+def _assert_sql_safe_table_name(table_name: str) -> str:
+    """Ingest / test tabloları: data_<_word_chars> — SQL injection önleme."""
+    if not re.fullmatch(r"data_[A-Za-z0-9_]+", table_name) or len(table_name) > 128:
+        raise HTTPException(status_code=400, detail="Geçersiz tablo adı.")
+    return table_name
 
 
 class ProfileResponse(BaseModel):
@@ -262,14 +285,40 @@ def _compute_recency_percentiles(df: pd.DataFrame, date_col: str) -> dict | None
 @router.post("/profile/{table_name}", response_model=ProfileResponse)
 def build_profile(table_name: str, db: Session = Depends(get_db)):
     try:
+        safe_table = _assert_sql_safe_table_name(table_name)
         dataset = db.query(Dataset).filter(Dataset.table_name == table_name).first()
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset bulunamadı.")
 
-        query = text(f'SELECT * FROM "{table_name}"')
-        df = pd.read_sql_query(query, database.engine)
+        count_query = text(f'SELECT COUNT(*) AS c FROM "{safe_table}"')
+        with database.engine.connect() as conn:
+            full_row_count = int(conn.execute(count_query).scalar_one())
+
+        if full_row_count <= 0:
+            raise HTTPException(status_code=400, detail="Profil üretilecek veri bulunamadı.")
+
+        sample_cap = _profile_sample_cap()
+        rows_to_read = min(sample_cap, full_row_count)
+        profile_sample_used = full_row_count > sample_cap
+
+        sample_query = text(f'SELECT * FROM "{safe_table}" LIMIT {rows_to_read}')
+        df = pd.read_sql_query(sample_query, database.engine)
         if df.empty:
             raise HTTPException(status_code=400, detail="Profil üretilecek veri bulunamadı.")
+
+        column_count_full = len(df.columns)
+
+        profiling_metadata = {
+            "profile_sample_rows": sample_cap,
+            "profile_rows_loaded": int(df.shape[0]),
+            "profile_sample_used": profile_sample_used,
+            "row_count_is_full": True,
+            "warning": (
+                "Profil büyük veri nedeniyle örnek üzerinden hesaplandı; row_count tam satır sayısıdır (COUNT(*))."
+                if profile_sample_used
+                else None
+            ),
+        }
 
         columns = []
         date_ranges: dict[str, dict] = {}
@@ -319,6 +368,10 @@ def build_profile(table_name: str, db: Session = Depends(get_db)):
             logger.info("Datetime skipped columns (%d): %s", len(skipped_datetime_candidates), skipped_datetime_candidates)
 
         numeric_df = df.select_dtypes(include=[np.number])
+        max_corr = _max_correlation_columns()
+        if numeric_df.shape[1] > max_corr:
+            numeric_df = numeric_df.iloc[:, :max_corr]
+
         correlations = []
         if numeric_df.shape[1] >= 2:
             corr_matrix = numeric_df.corr(numeric_only=True)
@@ -341,8 +394,9 @@ def build_profile(table_name: str, db: Session = Depends(get_db)):
 
         profile_payload = {
             "table_name": table_name,
-            "row_count": int(df.shape[0]),
-            "column_count": int(df.shape[1]),
+            "row_count": full_row_count,
+            "column_count": column_count_full,
+            "profiling_metadata": profiling_metadata,
             "columns": columns,
             "date_ranges": date_ranges,
             "recency_percentiles": recency_percentiles,

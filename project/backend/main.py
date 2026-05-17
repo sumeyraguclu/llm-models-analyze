@@ -42,9 +42,23 @@ app.include_router(datasets.router, tags=["datasets"])
 app.include_router(jobs.router, tags=["jobs"])
 
 
+def _llm_health() -> dict[str, str | bool]:
+    provider = (os.getenv("LLM_PROVIDER") or "mock").strip().lower() or "mock"
+    key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    gemini = (os.getenv("GEMINI_API_KEY") or "").strip()
+    ollama = (os.getenv("OLLAMA_BASE_URL") or "").strip()
+    configured = {
+        "mock": True,
+        "openai": bool(key),
+        "gemini": bool(gemini),
+        "ollama": bool(ollama),
+    }.get(provider, False)
+    return {"provider": provider, "configured": configured}
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "llm": _llm_health()}
 
 
 @app.get("/ready")

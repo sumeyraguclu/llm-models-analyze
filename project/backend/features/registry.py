@@ -4,6 +4,47 @@ import numpy as np
 import pandas as pd
 
 
+def _reference_date_for_recency(order_dates: pd.Series) -> pd.Timestamp:
+    """
+    Recency için 'bugün': güncel veride gerçek tarih; tarihsel snapshot'ta
+    veri setindeki son sipariş günü (Online Retail 2009–2011 vb.).
+    """
+    today = pd.Timestamp.today().normalize()
+    parsed = pd.to_datetime(order_dates, errors="coerce")
+    max_ts = parsed.max()
+    if pd.isna(max_ts):
+        return today
+    max_ts = pd.Timestamp(max_ts).normalize()
+    if (today - max_ts).days >= 365:
+        return max_ts
+    return today
+
+
+def _churn_labels(
+    recency_numeric: pd.Series,
+    *,
+    churn_strategy: str,
+    churn_threshold_days: int,
+    churn_quantile: float,
+) -> tuple[pd.Series, float, str]:
+    if churn_strategy == "fixed_days":
+        threshold_used = float(churn_threshold_days)
+        churn = recency_numeric > threshold_used
+        return churn, threshold_used, churn_strategy
+
+    if churn_strategy == "quantile":
+        if not (0.0 < churn_quantile < 1.0):
+            raise ValueError("churn_quantile 0 ile 1 arasında olmalı (örn. 0.70).")
+        # Sık tekrarlayan recency değerlerinde strict > tek sınıf üretebilir; yüzdelik rank kullan.
+        churn = recency_numeric.rank(method="first", pct=True) >= churn_quantile
+        threshold_used = float(recency_numeric.quantile(churn_quantile))
+        if pd.isna(threshold_used):
+            raise ValueError("churn_quantile için yeterli recency verisi yok.")
+        return churn, threshold_used, churn_strategy
+
+    raise ValueError("Geçersiz churn_strategy. Geçerliler: fixed_days | quantile")
+
+
 def _require_mapped_column(df: pd.DataFrame, column_map: dict, standard_key: str) -> str:
     if standard_key not in column_map:
         raise ValueError(f"column_map içinde '{standard_key}' tanımı yok.")
@@ -37,13 +78,13 @@ def build_customer_rfm_features(df: pd.DataFrame, column_map: dict, options: dic
     else:
         df["_revenue"] = np.nan
 
-    today = pd.Timestamp.today().normalize()
+    reference_date = _reference_date_for_recency(df[order_date_col])
 
     grouped = df.groupby(customer_col, dropna=False)
 
     last_order = grouped[order_date_col].max()
 
-    recency_days = (today - last_order).dt.days.rename("recency_days").astype("Int64")
+    recency_days = (reference_date - last_order).dt.days.rename("recency_days").astype("Int64")
 
     if order_id_col and order_id_col in df.columns:
         frequency = grouped[order_id_col].nunique(dropna=True).rename("frequency")
@@ -88,24 +129,25 @@ def build_customer_rfm_features(df: pd.DataFrame, column_map: dict, options: dic
     out = out.loc[valid_mask].copy()
     recency_numeric = recency_numeric.loc[valid_mask]
 
-    if churn_strategy == "fixed_days":
-        threshold_used = float(churn_threshold_days)
-        churn = recency_numeric > threshold_used
-    elif churn_strategy == "quantile":
-        if not (0.0 < churn_quantile < 1.0):
-            raise ValueError("churn_quantile 0 ile 1 arasında olmalı (örn. 0.70).")
-        threshold_used = float(recency_numeric.quantile(churn_quantile))
-        if pd.isna(threshold_used):
-            raise ValueError("churn_quantile için yeterli recency verisi yok.")
-        churn = recency_numeric > threshold_used
-    else:
-        raise ValueError("Geçersiz churn_strategy. Geçerliler: fixed_days | quantile")
+    churn, threshold_used, strategy_used = _churn_labels(
+        recency_numeric,
+        churn_strategy=churn_strategy,
+        churn_threshold_days=churn_threshold_days,
+        churn_quantile=churn_quantile,
+    )
+
+    if churn.nunique(dropna=False) < 2 and churn_strategy != "quantile":
+        churn, threshold_used, strategy_used = _churn_labels(
+            recency_numeric,
+            churn_strategy="quantile",
+            churn_threshold_days=churn_threshold_days,
+            churn_quantile=churn_quantile,
+        )
 
     out["churn"] = churn.fillna(False).astype(np.int64)
     out["churn_threshold_used"] = threshold_used
-    out["churn_strategy_used"] = churn_strategy
+    out["churn_strategy_used"] = strategy_used
 
-    # Validation: need at least 2 classes
     if out["churn"].nunique(dropna=False) < 2:
         raise ValueError(
             "Invalid churn label: only one class found. Try quantile strategy or different threshold."
