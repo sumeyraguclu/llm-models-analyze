@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import AnalysisJob, Dataset, PlanSnapshot
+from dependencies.auth import CurrentUser
+from models import AnalysisJob, PlanSnapshot
+from services.ownership import require_owned_dataset, require_owned_plan
 from services.analysis_job_tasks import run_analysis_job
 
 router = APIRouter(prefix="/plans", tags=["plans"])
@@ -30,10 +32,8 @@ class PlanSnapshotDetailResponse(BaseModel):
 
 
 @router.get("/{plan_id}", response_model=PlanSnapshotDetailResponse)
-def get_plan_snapshot(plan_id: int, db: Session = Depends(get_db)):
-    snap = db.query(PlanSnapshot).filter(PlanSnapshot.id == plan_id).first()
-    if not snap:
-        raise HTTPException(status_code=404, detail="Plan bulunamadı.")
+def get_plan_snapshot(plan_id: int, current_user: CurrentUser, db: Session = Depends(get_db)):
+    snap = require_owned_plan(db, current_user, plan_id)
     return PlanSnapshotDetailResponse(
         id=snap.id,
         dataset_id=snap.dataset_id,
@@ -48,10 +48,8 @@ def get_plan_snapshot(plan_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{plan_id}/approve")
-def approve_plan_snapshot(plan_id: int, db: Session = Depends(get_db)):
-    snap = db.query(PlanSnapshot).filter(PlanSnapshot.id == plan_id).first()
-    if not snap:
-        raise HTTPException(status_code=404, detail="Plan bulunamadı.")
+def approve_plan_snapshot(plan_id: int, current_user: CurrentUser, db: Session = Depends(get_db)):
+    snap = require_owned_plan(db, current_user, plan_id)
     if snap.status == "approved":
         return {
             "plan_id": snap.id,
@@ -81,11 +79,9 @@ def approve_plan_snapshot(plan_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{plan_id}/reject")
-def reject_plan_snapshot(plan_id: int, db: Session = Depends(get_db)):
+def reject_plan_snapshot(plan_id: int, current_user: CurrentUser, db: Session = Depends(get_db)):
     """Taslak planı reddet (immutable snapshot silinmez)."""
-    snap = db.query(PlanSnapshot).filter(PlanSnapshot.id == plan_id).first()
-    if not snap:
-        raise HTTPException(status_code=404, detail="Plan bulunamadı.")
+    snap = require_owned_plan(db, current_user, plan_id)
     if snap.status != "draft":
         raise HTTPException(
             status_code=400,
@@ -113,12 +109,11 @@ def create_analysis_job(
     plan_id: int,
     body: CreateAnalysisJobRequest,
     background_tasks: BackgroundTasks,
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
 ):
     """Onaylı plan için arka planda model eğitimi başlatır; hemen job_id döner."""
-    snap = db.query(PlanSnapshot).filter(PlanSnapshot.id == plan_id).first()
-    if not snap:
-        raise HTTPException(status_code=404, detail="Plan bulunamadı.")
+    snap = require_owned_plan(db, current_user, plan_id)
     if snap.dataset_id != body.dataset_id:
         raise HTTPException(
             status_code=400,
@@ -137,9 +132,7 @@ def create_analysis_job(
                 "current_status": snap.status,
             },
         )
-    ds = db.query(Dataset).filter(Dataset.id == body.dataset_id).first()
-    if not ds:
-        raise HTTPException(status_code=404, detail="Dataset bulunamadı.")
+    require_owned_dataset(db, current_user, body.dataset_id)
 
     job = AnalysisJob(
         dataset_id=body.dataset_id,

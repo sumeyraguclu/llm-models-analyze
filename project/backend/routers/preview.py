@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 import database
 
 from database import get_db
+from dependencies.auth import CurrentUser
 from models import Dataset
+from services.ownership import require_owned_dataset, require_owned_dataset_by_table
 
 router = APIRouter()
 
@@ -21,21 +23,31 @@ class PreviewResponse(BaseModel):
 @router.get("/preview/{table_name}", response_model=PreviewResponse)
 def preview_table(
     table_name: str,
+    current_user: CurrentUser,
     limit: int = Query(default=20, ge=1, le=200),
+    db: Session = Depends(get_db),
 ):
+    require_owned_dataset_by_table(db, current_user, table_name)
     try:
         query = text(f'SELECT * FROM "{table_name}" LIMIT :limit')
         df = pd.read_sql_query(query, database.engine, params={"limit": limit})
         rows = df.where(pd.notna(df), None).to_dict(orient="records")
         return PreviewResponse(table_name=table_name, limit=limit, rows=rows)
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Preview hatası: {exc}") from exc
 
 
 @router.get("/datasets")
-def list_datasets(db: Session = Depends(get_db)):
+def list_datasets(current_user: CurrentUser, db: Session = Depends(get_db)):
     try:
-        datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()
+        datasets = (
+            db.query(Dataset)
+            .filter(Dataset.user_id == current_user.id)
+            .order_by(Dataset.created_at.desc())
+            .all()
+        )
         return [
             {
                 "id": d.id,
@@ -52,11 +64,9 @@ def list_datasets(db: Session = Depends(get_db)):
 
 
 @router.get("/datasets/{dataset_id}")
-def get_dataset(dataset_id: int, db: Session = Depends(get_db)):
+def get_dataset(dataset_id: int, current_user: CurrentUser, db: Session = Depends(get_db)):
     try:
-        dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-        if not dataset:
-            raise HTTPException(status_code=404, detail="Dataset bulunamadı.")
+        dataset = require_owned_dataset(db, current_user, dataset_id)
         return {
             "id": dataset.id,
             "file_name": dataset.file_name,

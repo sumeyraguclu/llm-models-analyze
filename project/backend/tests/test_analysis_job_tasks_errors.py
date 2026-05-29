@@ -48,9 +48,13 @@ def _seed_dataset_with_table(*, n_customers: int = 120) -> tuple[int, str]:
     df = ecommerce_tx_dataframe(n_customers=n_customers, rows_per_customer=6)
     table = f"data_jobtest_{uuid4().hex[:10]}"
     df.to_sql(table, database.engine, if_exists="replace", index=False)
+    from tests.conftest import make_db_user
+
     db = SessionLocal()
     try:
+        user = make_db_user(db)
         ds = Dataset(
+            user_id=user.id,
             file_name="jobtest.csv",
             table_name=table,
             column_defs=[{"name": c, "dtype": str(t)} for c, t in df.dtypes.items()],

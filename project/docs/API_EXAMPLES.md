@@ -2,6 +2,28 @@
 
 Taban URL örnek: `http://127.0.0.1:8000`. Aşağıdaki yollar `project/backend/main.py` ve `project/backend/routers/*.py` ile uyumludur.
 
+Korumalı uçlar için **`Authorization: Bearer <access_token>`** gerekir (kayıt/giriş sonrası). Public: `GET /health`, `GET /ready`.
+
+---
+
+## 0. Auth
+
+**`POST /auth/register`** — gövde: `{ "email", "password" (≥8), "full_name"? }` → `201` + `access_token`.
+
+**`POST /auth/login`** — gövde: `{ "email", "password" }` → `access_token`.
+
+**`GET /auth/me`** — Bearer token ile mevcut kullanıcı.
+
+```bash
+TOKEN=$(curl -s -X POST http://127.0.0.1:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@example.com","password":"securepass1"}' | jq -r .access_token)
+
+curl -s http://127.0.0.1:8000/auth/me -H "Authorization: Bearer $TOKEN"
+```
+
+Sonraki örneklerde: `-H "Authorization: Bearer $TOKEN"`
+
 ---
 
 ## 1. Dataset yükleme (CSV)

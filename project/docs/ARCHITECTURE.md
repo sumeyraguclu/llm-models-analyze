@@ -4,6 +4,16 @@ Bu proje, e‑ticaret işlem CSV’lerinden **güvenli bir analiz planı** üret
 
 ---
 
+## Auth ve veri izolasyonu (production-lite)
+
+- **`users`** tablosu: e-posta + bcrypt şifre özeti, JWT ile oturum.
+- Her **`datasets`** satırı `user_id` ile bir kullanıcıya bağlı; plan, job ve model kayıtları dataset üzerinden yetkilendirilir.
+- `services/ownership.py`: `require_owned_dataset`, `require_owned_plan`, `require_owned_job`, `require_owned_table` (preview/profile).
+- Public uçlar: `GET /health`, `GET /ready`. Diğer analiz/ingest/agent uçları `Authorization: Bearer` zorunlu.
+- Mevcut production DB için SQL: [`docs/MIGRATION_AUTH.md`](MIGRATION_AUTH.md).
+
+---
+
 ## LLM’in rolü
 
 | Alan | Rol |

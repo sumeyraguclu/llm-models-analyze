@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session
 import database
 
 from database import get_db
-from models import Dataset
+from dependencies.auth import CurrentUser
+from services.ownership import require_owned_dataset_by_table
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -283,12 +284,10 @@ def _compute_recency_percentiles(df: pd.DataFrame, date_col: str) -> dict | None
 
 
 @router.post("/profile/{table_name}", response_model=ProfileResponse)
-def build_profile(table_name: str, db: Session = Depends(get_db)):
+def build_profile(table_name: str, current_user: CurrentUser, db: Session = Depends(get_db)):
     try:
         safe_table = _assert_sql_safe_table_name(table_name)
-        dataset = db.query(Dataset).filter(Dataset.table_name == table_name).first()
-        if not dataset:
-            raise HTTPException(status_code=404, detail="Dataset bulunamadı.")
+        dataset = require_owned_dataset_by_table(db, current_user, table_name)
 
         count_query = text(f'SELECT COUNT(*) AS c FROM "{safe_table}"')
         with database.engine.connect() as conn:

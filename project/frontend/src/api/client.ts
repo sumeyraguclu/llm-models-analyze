@@ -1,5 +1,6 @@
 import axios from "axios";
 
+import { clearAccessToken, getAccessToken, setAccessToken } from "../auth/token";
 import type {
   AnalysisPlan,
   AnalyzeResponse,
@@ -46,6 +47,44 @@ export interface AnalysisPlanResponse {
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8000",
 });
+
+api.interceptors.request.use((config) => {
+  const token = getAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  full_name: string | null;
+  is_active: boolean;
+}
+
+export async function register(email: string, password: string, fullName?: string): Promise<void> {
+  const response = await api.post<{ access_token: string }>("/auth/register", {
+    email,
+    password,
+    full_name: fullName ?? null,
+  });
+  setAccessToken(response.data.access_token);
+}
+
+export async function login(email: string, password: string): Promise<void> {
+  const response = await api.post<{ access_token: string }>("/auth/login", { email, password });
+  setAccessToken(response.data.access_token);
+}
+
+export async function fetchCurrentUser(): Promise<AuthUser> {
+  const response = await api.get<AuthUser>("/auth/me");
+  return response.data;
+}
+
+export function logout(): void {
+  clearAccessToken();
+}
 
 export async function ingestCsv(file: File): Promise<IngestResponse> {
   const formData = new FormData();

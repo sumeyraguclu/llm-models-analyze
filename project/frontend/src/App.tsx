@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { fetchCurrentUser, logout } from "./api/client";
+import { isLoggedIn } from "./auth/token";
 import type { AnalysisPlan, ModelMetrics } from "./types";
+import AuthPage from "./components/AuthPage";
 import DatasetPage from "./components/DatasetPage";
 import DemoFlowRail, { type DemoStageKey } from "./components/DemoFlowRail";
 import JobRunPage from "./components/JobRunPage";
@@ -32,10 +35,47 @@ function railStageForState(state: AppState): DemoStageKey {
 
 export default function App() {
   const [state, setState] = useState<AppState>({ stage: "upload" });
+  const [authenticated, setAuthenticated] = useState(() => isLoggedIn());
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!authenticated) {
+      setUserEmail(null);
+      return;
+    }
+    fetchCurrentUser()
+      .then((u) => setUserEmail(u.email))
+      .catch(() => {
+        logout();
+        setAuthenticated(false);
+      });
+  }, [authenticated]);
+
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen bg-bg px-6 py-12">
+        <AuthPage onAuthenticated={() => setAuthenticated(true)} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-5xl px-6 py-8">
+        <div className="mb-4 flex items-center justify-end gap-3 text-sm text-muted">
+          {userEmail && <span>{userEmail}</span>}
+          <button
+            type="button"
+            className="rounded-md border border-border px-3 py-1 text-fg hover:bg-surface"
+            onClick={() => {
+              logout();
+              setAuthenticated(false);
+              setState({ stage: "upload" });
+            }}
+          >
+            Çıkış
+          </button>
+        </div>
         <DemoFlowRail stage={railStageForState(state)} />
 
         {state.stage === "upload" && (

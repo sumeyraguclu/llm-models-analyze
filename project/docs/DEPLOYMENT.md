@@ -39,6 +39,8 @@ Bu rehber **en az sürtünme** ile çalışan demo hedefler: anahtarsız **`LLM_
    - `CORS_ORIGINS` = Vercel URL’iniz + isteğe bağlı yerel geliştirme, **virgülle**, örnek:  
      `https://automl-demo.vercel.app,http://localhost:5173`
    - `PYTHONUNBUFFERED` = `1` (log için; isteğe bağlı).
+   - **`SECRET_KEY`** = güçlü rastgele anahtar (JWT imzası; zorunlu).
+   - `ACCESS_TOKEN_EXPIRE_MINUTES` = `60` (isteğe bağlı).
 4. **Build:** `pip install -r requirements.txt`  
 5. **Start:** `uvicorn main:app --host 0.0.0.0 --port $PORT`  
 6. **Health check path:** `/health`  

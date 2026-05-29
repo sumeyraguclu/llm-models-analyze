@@ -21,7 +21,7 @@ Adım adım rehber: **[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)**. Özet: Neon 
 
 ### 1) Ortam dosyaları
 
-- **Backend:** `project/backend/.env.example` → kopyalayın `.env` yapın; en azından `DATABASE_URL` ve portföy için `LLM_PROVIDER=mock`.
+- **Backend:** `project/backend/.env.example` → kopyalayın `.env` yapın; en azından `DATABASE_URL`, **`SECRET_KEY`**, ve portföy için `LLM_PROVIDER=mock`.
 - **Frontend:** `project/frontend/.env.example` → `.env` veya `.env.local`; `VITE_API_URL` backend adresiniz olsun (yerelde genelde `http://127.0.0.1:8000`).
 
 ### 2) Backend
@@ -42,7 +42,19 @@ npm install
 npm run dev
 ```
 
-Tarayıcı: `http://localhost:5173` — üstteki **1→9** şeridi ve sayfa başlıkları demo sırasını gösterir.
+Tarayıcı: `http://localhost:5173` — önce **giriş/kayıt**; ardından üstteki **1→9** şeridi demo sırasını gösterir.
+
+---
+
+## Auth (özet)
+
+| Uç | Açıklama |
+|-----|----------|
+| `POST /auth/register` | Hesap + JWT |
+| `POST /auth/login` | JWT |
+| `GET /auth/me` | Bearer ile kullanıcı bilgisi |
+
+Frontend token’ı `localStorage`’da tutar; API isteklerine `Authorization: Bearer …` ekler. Dataset’ler kullanıcıya özeldir — ayrıntı: [`docs/MIGRATION_AUTH.md`](docs/MIGRATION_AUTH.md), [`docs/API_EXAMPLES.md`](docs/API_EXAMPLES.md).
 
 ---
 

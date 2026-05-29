@@ -11,7 +11,9 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import AIModel, Dataset, PlanSnapshot
+from dependencies.auth import CurrentUser
+from models import AIModel, PlanSnapshot
+from services.ownership import require_owned_dataset, require_owned_plan
 from schemas.analysis_plan import AnalysisPlanSchema
 from services.analysis_execution import (
     AnalysisExecutionError,
@@ -43,15 +45,13 @@ class AnalyzeRequest(BaseModel):
 
 
 @router.post("/analyze", summary="Senkron model eğitimi (legacy + mevcut UI)")
-def analyze(payload: AnalyzeRequest, db: Session = Depends(get_db)):
+def analyze(payload: AnalyzeRequest, current_user: CurrentUser, db: Session = Depends(get_db)):
     try:
         validated_plan: AnalysisPlanSchema | None = None
         use_snapshot = payload.plan_id is not None
 
         if use_snapshot:
-            snap = db.query(PlanSnapshot).filter(PlanSnapshot.id == payload.plan_id).first()
-            if not snap:
-                raise HTTPException(status_code=404, detail="plan_id ile eşleşen plan bulunamadı.")
+            snap = require_owned_plan(db, current_user, payload.plan_id)
             if snap.dataset_id != payload.dataset_id:
                 raise HTTPException(
                     status_code=400,
@@ -110,9 +110,7 @@ def analyze(payload: AnalyzeRequest, db: Session = Depends(get_db)):
                 if not isinstance(column_map, dict) or not column_map:
                     raise HTTPException(status_code=400, detail="column_map gerekli.")
 
-        dataset = db.query(Dataset).filter(Dataset.id == payload.dataset_id).first()
-        if not dataset:
-            raise HTTPException(status_code=404, detail="Dataset bulunamadı.")
+        dataset = require_owned_dataset(db, current_user, payload.dataset_id)
 
         model_row = AIModel(
             dataset_id=payload.dataset_id,

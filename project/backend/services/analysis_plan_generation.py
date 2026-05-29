@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from agent.prompt_builder import build_system_prompt
+from models import User
 from schemas.analysis_plan import AnalysisPlanSchema
 from services.analysis_plan_normalize import normalize_raw_analysis_plan_dict
 from services.column_matching import (
@@ -82,6 +83,7 @@ def _call_llm_or_http(
 
 def generate_validated_analysis_plan(
     db: Session,
+    user: User,
     dataset_id: int,
     user_goal: str | None,
 ) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
@@ -91,7 +93,7 @@ def generate_validated_analysis_plan(
         mapping_confidence: hibrit kolon eşleştirme özeti (PlanSnapshot.mapping_confidence_json)
         warnings: düz liste (PlanSnapshot.warnings_json; plan_dump['warnings'] ile uyumlu)
     """
-    dataset = require_dataset_with_profile(db, dataset_id)
+    dataset = require_dataset_with_profile(db, user, dataset_id)
 
     profile = dataset.column_profile or {}
     prof_cols = profile.get("columns") or []

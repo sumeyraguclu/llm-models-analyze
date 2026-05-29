@@ -1,19 +1,34 @@
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import relationship
 
 from database import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    datasets = relationship("Dataset", back_populates="owner", cascade="all, delete-orphan")
 
 
 class Dataset(Base):
     __tablename__ = "datasets"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     file_name = Column(String(255), nullable=False)
     table_name = Column(String(128), nullable=False, unique=True, index=True)
     column_defs = Column(JSON, nullable=False, default=list)
     column_profile = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    owner = relationship("User", back_populates="datasets")
     ai_models = relationship("AIModel", back_populates="dataset", cascade="all, delete-orphan")
     plan_snapshots = relationship("PlanSnapshot", back_populates="dataset", cascade="all, delete-orphan")
     analysis_jobs = relationship("AnalysisJob", back_populates="dataset", cascade="all, delete-orphan")

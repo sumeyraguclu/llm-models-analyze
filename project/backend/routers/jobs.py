@@ -7,7 +7,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import AIModel, AnalysisJob
+from dependencies.auth import CurrentUser
+from models import AIModel
+from services.ownership import require_owned_job, require_owned_model
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -30,10 +32,8 @@ def _iso(dt) -> str | None:
 
 
 @router.get("/{job_id}", response_model=JobStatusResponse)
-def get_job(job_id: int, db: Session = Depends(get_db)):
-    j = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
-    if not j:
-        raise HTTPException(status_code=404, detail="Job bulunamadı.")
+def get_job(job_id: int, current_user: CurrentUser, db: Session = Depends(get_db)):
+    j = require_owned_job(db, current_user, job_id)
     return JobStatusResponse(
         job_id=j.id,
         dataset_id=j.dataset_id,
@@ -49,11 +49,9 @@ def get_job(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{job_id}/result")
-def get_job_result(job_id: int, db: Session = Depends(get_db)):
+def get_job_result(job_id: int, current_user: CurrentUser, db: Session = Depends(get_db)):
     """Tamamlanan job için POST /analyze ile uyumlu sonuç gövdesi."""
-    j = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
-    if not j:
-        raise HTTPException(status_code=404, detail="Job bulunamadı.")
+    j = require_owned_job(db, current_user, job_id)
     if j.status == "failed":
         raise HTTPException(
             status_code=409,
@@ -75,9 +73,7 @@ def get_job_result(job_id: int, db: Session = Depends(get_db)):
         )
     if not j.result_model_run_id:
         raise HTTPException(status_code=500, detail="Job tamamlandı ancak model_run_id eksik.")
-    mr = db.query(AIModel).filter(AIModel.id == j.result_model_run_id).first()
-    if not mr:
-        raise HTTPException(status_code=404, detail="Model kaydı bulunamadı.")
+    mr = require_owned_model(db, current_user, j.result_model_run_id)
     metrics = mr.metrics if isinstance(mr.metrics, dict) else {}
     top_dw = metrics.get("data_warning") if isinstance(metrics, dict) else None
     return {

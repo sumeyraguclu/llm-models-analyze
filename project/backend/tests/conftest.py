@@ -18,6 +18,8 @@ _tmpdir = tempfile.mkdtemp(prefix="automl_pytest_")
 _DB_PATH = Path(_tmpdir) / "test.sqlite"
 os.environ["LLM_PROVIDER"] = "mock"
 os.environ["DATABASE_URL"] = f"sqlite+pysqlite:///{_DB_PATH.as_posix()}"
+os.environ["SECRET_KEY"] = "pytest-secret-key-not-for-production"
+os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "60"
 
 
 @pytest.fixture(autouse=True)
@@ -46,15 +48,100 @@ def _forbid_llm_client_http(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(lc.requests, "get", _deny)
 
 
+class _AuthenticatedClient:
+    """TestClient wrapper — varsayılan Authorization: Bearer."""
+
+    def __init__(self, inner, headers: dict[str, str]):
+        self._inner = inner
+        self._headers = headers
+
+    def _merge_headers(self, kwargs: dict) -> dict:
+        extra = kwargs.pop("headers", None) or {}
+        return {**self._headers, **extra}
+
+    def get(self, url: str, **kwargs):
+        return self._inner.get(url, headers=self._merge_headers(kwargs), **kwargs)
+
+    def post(self, url: str, **kwargs):
+        return self._inner.post(url, headers=self._merge_headers(kwargs), **kwargs)
+
+    def put(self, url: str, **kwargs):
+        return self._inner.put(url, headers=self._merge_headers(kwargs), **kwargs)
+
+    def patch(self, url: str, **kwargs):
+        return self._inner.patch(url, headers=self._merge_headers(kwargs), **kwargs)
+
+    def delete(self, url: str, **kwargs):
+        return self._inner.delete(url, headers=self._merge_headers(kwargs), **kwargs)
+
+
 @pytest.fixture
-def client():
-    """FastAPI ASGI client (BackgroundTasks aynı thread'de response sonrası çalışır)."""
+def raw_client():
+    """Kimlik doğrulamasız ASGI client (auth testleri)."""
     import main  # noqa: WPS433 — env sonrası
 
     from starlette.testclient import TestClient
 
     with TestClient(main.app) as c:
         yield c
+
+
+@pytest.fixture
+def auth_headers(raw_client):
+    """Kayıt olup access token döner."""
+    from uuid import uuid4
+
+    email = f"user_{uuid4().hex}@test.local"
+    r = raw_client.post(
+        "/auth/register",
+        json={"email": email, "password": "testpass123", "full_name": "Test User"},
+    )
+    assert r.status_code == 201, r.text
+    token = r.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def client(raw_client, auth_headers):
+    """Korumalı endpoint testleri için otomatik Bearer header."""
+    return _AuthenticatedClient(raw_client, auth_headers)
+
+
+@pytest.fixture
+def current_user_id(raw_client, auth_headers) -> int:
+    r = raw_client.get("/auth/me", headers=auth_headers)
+    assert r.status_code == 200
+    return int(r.json()["id"])
+
+
+def make_db_user(db, *, email: str | None = None):
+    """Doğrudan SessionLocal kullanan unit testler için User oluşturur."""
+    from uuid import uuid4
+
+    from models import User
+    from services.security import hash_password
+
+    user = User(
+        email=email or f"db_{uuid4().hex}@test.local",
+        password_hash=hash_password("testpass123"),
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def register_second_user(raw_client) -> dict[str, str]:
+    from uuid import uuid4
+
+    email = f"other_{uuid4().hex}@test.local"
+    r = raw_client.post(
+        "/auth/register",
+        json={"email": email, "password": "otherpass123"},
+    )
+    assert r.status_code == 201, r.text
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
 def ecommerce_tx_dataframe(

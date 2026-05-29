@@ -9,12 +9,15 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
-from models import Dataset
+from models import Dataset, User
 from services.analysis_plan_generation import generate_validated_analysis_plan
+from tests.conftest import make_db_user
 
 
-def _dataset_with_profile(db: Session) -> int:
+def _dataset_with_profile(db: Session) -> tuple[User, int]:
+    user = make_db_user(db)
     ds = Dataset(
+        user_id=user.id,
         file_name="t.csv",
         table_name="t_dummy",
         column_defs=[{"name": "Customer ID", "dtype": "object"}],
@@ -31,7 +34,7 @@ def _dataset_with_profile(db: Session) -> int:
     db.add(ds)
     db.commit()
     db.refresh(ds)
-    return int(ds.id)
+    return user, int(ds.id)
 
 
 def test_malformed_llm_json_raises(monkeypatch: pytest.MonkeyPatch):
@@ -41,9 +44,9 @@ def test_malformed_llm_json_raises(monkeypatch: pytest.MonkeyPatch):
     )
     db = SessionLocal()
     try:
-        did = _dataset_with_profile(db)
+        user, did = _dataset_with_profile(db)
         with pytest.raises(HTTPException) as ei:
-            generate_validated_analysis_plan(db, did, None)
+            generate_validated_analysis_plan(db, user, did, None)
         assert ei.value.status_code == 500
     finally:
         db.close()
@@ -80,8 +83,8 @@ def test_valid_fake_llm_plan_passes_validation(monkeypatch: pytest.MonkeyPatch):
     )
     db = SessionLocal()
     try:
-        did = _dataset_with_profile(db)
-        plan, mapping, warnings = generate_validated_analysis_plan(db, did, "churn analizi")
+        user, did = _dataset_with_profile(db)
+        plan, mapping, warnings = generate_validated_analysis_plan(db, user, did, "churn analizi")
         assert plan["template"] == "churn"
         assert mapping
         assert isinstance(warnings, list)
@@ -96,9 +99,9 @@ def test_llm_runtime_error_mapped_to_http(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("services.analysis_plan_generation.call_llm", boom)
     db = SessionLocal()
     try:
-        did = _dataset_with_profile(db)
+        user, did = _dataset_with_profile(db)
         with pytest.raises(HTTPException) as ei:
-            generate_validated_analysis_plan(db, did, None)
+            generate_validated_analysis_plan(db, user, did, None)
         assert ei.value.status_code == 401
     finally:
         db.close()

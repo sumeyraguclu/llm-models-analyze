@@ -8,7 +8,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-def test_explain_malformed_json_returns_500(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+def test_explain_malformed_json_returns_500(
+    client: TestClient, current_user_id: int, monkeypatch: pytest.MonkeyPatch
+):
     import routers.agent as agent_mod
 
     monkeypatch.setattr(agent_mod, "call_llm", lambda *_a, **_k: "not json {{{")
@@ -19,6 +21,7 @@ def test_explain_malformed_json_returns_500(client: TestClient, monkeypatch: pyt
     db = SessionLocal()
     try:
         ds = Dataset(
+            user_id=current_user_id,
             file_name="f.csv",
             table_name="tbl_x",
             column_defs=[],
@@ -46,7 +49,9 @@ def test_explain_malformed_json_returns_500(client: TestClient, monkeypatch: pyt
     assert "JSON" in r.json()["detail"] or "json" in r.json()["detail"].lower()
 
 
-def test_explain_success_with_fake_llm_json(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+def test_explain_success_with_fake_llm_json(
+    client: TestClient, current_user_id: int, monkeypatch: pytest.MonkeyPatch
+):
     import routers.agent as agent_mod
 
     payload = {
@@ -63,6 +68,7 @@ def test_explain_success_with_fake_llm_json(client: TestClient, monkeypatch: pyt
     db = SessionLocal()
     try:
         ds = Dataset(
+            user_id=current_user_id,
             file_name="f2.csv",
             table_name="tbl_y",
             column_defs=[],

@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from database import Base, engine
 import models  # noqa: F401 — ORM tablolarını metadata'ya kaydet (AnalysisJob dahil)
-from routers import agent, analyze, datasets, ingest, jobs, plans, preview, profile
+from routers import agent, analyze, auth, datasets, ingest, jobs, plans, preview, profile
 
 
 Base.metadata.create_all(bind=engine)
@@ -32,6 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(ingest.router, tags=["ingest"])
 app.include_router(plans.router, tags=["plans"])
 app.include_router(profile.router, tags=["profile"])

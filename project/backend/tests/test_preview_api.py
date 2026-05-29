@@ -20,10 +20,9 @@ def test_preview_valid_table(client: TestClient, churn_csv_bytes: bytes):
     assert len(j["rows"]) >= 1
 
 
-def test_preview_nonexistent_table_returns_500(client: TestClient):
+def test_preview_nonexistent_table_returns_404(client: TestClient):
     r = client.get("/preview/no_such_table_xyz_12345")
-    assert r.status_code == 500
-    assert "Preview" in r.json().get("detail", "") or "preview" in r.json().get("detail", "").lower()
+    assert r.status_code == 404
 
 
 def test_get_dataset_invalid_id_404(client: TestClient):

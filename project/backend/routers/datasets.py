@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 import database
 
 from database import get_db
+from dependencies.auth import CurrentUser
 from models import Dataset, PlanSnapshot
+from services.ownership import require_owned_dataset
 from services.analysis_plan_generation import generate_validated_analysis_plan
 from validation.dispatch import validate_dataframe
 from validation.quality_score import compute_quality_score
@@ -37,15 +39,18 @@ class PlanListResponse(BaseModel):
 @router.post("/{dataset_id}/plans")
 def create_dataset_plan(
     dataset_id: int,
+    current_user: CurrentUser,
     body: CreatePlanBody | None = None,
     db: Session = Depends(get_db),
 ):
     """
     LLM ile analysis_plan üretir ve immutable PlanSnapshot olarak draft kaydeder.
     """
-    _require_dataset(db, dataset_id)
+    require_owned_dataset(db, current_user, dataset_id)
     user_goal = body.user_goal if body else None
-    plan_dump, mapping, warnings = generate_validated_analysis_plan(db, dataset_id, user_goal)
+    plan_dump, mapping, warnings = generate_validated_analysis_plan(
+        db, current_user, dataset_id, user_goal
+    )
 
     snap = PlanSnapshot(
         dataset_id=dataset_id,
@@ -72,8 +77,8 @@ def create_dataset_plan(
 
 
 @router.get("/{dataset_id}/plans", response_model=PlanListResponse)
-def list_dataset_plans(dataset_id: int, db: Session = Depends(get_db)):
-    _require_dataset(db, dataset_id)
+def list_dataset_plans(dataset_id: int, current_user: CurrentUser, db: Session = Depends(get_db)):
+    require_owned_dataset(db, current_user, dataset_id)
     rows = (
         db.query(PlanSnapshot)
         .filter(PlanSnapshot.dataset_id == dataset_id)
@@ -98,13 +103,6 @@ def list_dataset_plans(dataset_id: int, db: Session = Depends(get_db)):
     return PlanListResponse(dataset_id=dataset_id, plans=items)
 
 
-def _require_dataset(db: Session, dataset_id: int) -> Dataset:
-    ds = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-    if not ds:
-        raise HTTPException(status_code=404, detail="Dataset bulunamadı.")
-    return ds
-
-
 def _load_dataframe(dataset: Dataset) -> pd.DataFrame:
     query = text(f'SELECT * FROM "{dataset.table_name}"')
     return pd.read_sql_query(query, database.engine)
@@ -113,6 +111,7 @@ def _load_dataframe(dataset: Dataset) -> pd.DataFrame:
 @router.get("/{dataset_id}/validation")
 def get_dataset_validation(
     dataset_id: int,
+    current_user: CurrentUser,
     template: str = Query(
         "churn",
         description="Şablon: churn | segmentasyon | satis_tahmini | uplift",
@@ -123,7 +122,7 @@ def get_dataset_validation(
     Deterministik e-ticaret işlem doğrulaması (pandas + kolon hibrit eşleştirme).
     LLM kullanılmaz; mevcut /analyze akışını değiştirmez.
     """
-    dataset = _require_dataset(db, dataset_id)
+    dataset = require_owned_dataset(db, current_user, dataset_id)
     try:
         df = _load_dataframe(dataset)
     except Exception as exc:
@@ -139,6 +138,7 @@ def get_dataset_validation(
 @router.get("/{dataset_id}/quality")
 def get_dataset_quality(
     dataset_id: int,
+    current_user: CurrentUser,
     template: str = Query(
         "churn",
         description="Şablon kimliği (validation metrikleri buna göre hesaplanır).",
@@ -146,7 +146,7 @@ def get_dataset_quality(
     db: Session = Depends(get_db),
 ):
     """0-100 kalite skoru ve alt bileşenler (validation metriklerinden türetilir)."""
-    dataset = _require_dataset(db, dataset_id)
+    dataset = require_owned_dataset(db, current_user, dataset_id)
     try:
         df = _load_dataframe(dataset)
     except Exception as exc:

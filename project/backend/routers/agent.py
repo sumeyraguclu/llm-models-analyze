@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 
 from agent.prompt_builder import build_chat_system_prompt
 from database import get_db
-from models import AIModel, Dataset
+from dependencies.auth import CurrentUser
+from models import AIModel
+from services.ownership import require_owned_model
 from services.analysis_plan_generation import generate_validated_analysis_plan
 from services.dataset_access import require_dataset_with_profile
 from services.llm_client import call_llm
@@ -186,9 +188,9 @@ def _validate_explanation(obj: dict) -> ExplainResponse:
 
 
 @router.post("/agent/chat", response_model=AgentChatResponse)
-def chat_with_agent(payload: AgentChatRequest, db: Session = Depends(get_db)):
+def chat_with_agent(payload: AgentChatRequest, current_user: CurrentUser, db: Session = Depends(get_db)):
     try:
-        dataset = require_dataset_with_profile(db, payload.dataset_id)
+        dataset = require_dataset_with_profile(db, current_user, payload.dataset_id)
 
         system_prompt = build_chat_system_prompt(dataset)
         answer = call_llm(system_prompt, payload.message)
@@ -200,9 +202,11 @@ def chat_with_agent(payload: AgentChatRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/agent/analysis-plan", response_model=AnalysisPlanResponse)
-def create_analysis_plan(payload: AnalysisPlanRequest, db: Session = Depends(get_db)):
+def create_analysis_plan(payload: AnalysisPlanRequest, current_user: CurrentUser, db: Session = Depends(get_db)):
     try:
-        plan_dump, _, _ = generate_validated_analysis_plan(db, payload.dataset_id, payload.user_goal)
+        plan_dump, _, _ = generate_validated_analysis_plan(
+            db, current_user, payload.dataset_id, payload.user_goal
+        )
         return AnalysisPlanResponse(analysis_plan=plan_dump)
     except HTTPException:
         raise
@@ -211,16 +215,13 @@ def create_analysis_plan(payload: AnalysisPlanRequest, db: Session = Depends(get
 
 
 @router.post("/agent/explain", response_model=ExplainResponse)
-def explain_model_results(payload: ExplainRequest, db: Session = Depends(get_db)):
+def explain_model_results(payload: ExplainRequest, current_user: CurrentUser, db: Session = Depends(get_db)):
     try:
-        model_row = db.query(AIModel).filter(AIModel.id == payload.model_id).first()
-        if not model_row:
-            raise HTTPException(status_code=404, detail="Model bulunamadı.")
+        model_row = require_owned_model(db, current_user, payload.model_id)
         if model_row.status != "completed" or not model_row.metrics:
             raise HTTPException(status_code=400, detail="Model metrikleri hazır değil (completed + metrics gerekli).")
 
-        dataset = db.query(Dataset).filter(Dataset.id == model_row.dataset_id).first()
-        table_name = dataset.table_name if dataset else None
+        table_name = model_row.dataset.table_name if model_row.dataset else None
 
         system_prompt = """
 Sen teknik olmayan bir dil kullanan veri bilimi asistanısın.

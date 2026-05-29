@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 import database
 
 from database import get_db
+from dependencies.auth import CurrentUser
 from models import Dataset
 
 router = APIRouter()
@@ -190,7 +191,11 @@ def _ingest_csv_chunks_to_table(
 
 
 @router.post("/ingest/csv", response_model=IngestResponse)
-async def ingest_csv(csv_file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def ingest_csv(
+    current_user: CurrentUser,
+    csv_file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
     temp_path: str | None = None
     try:
         temp_path, _upload_bytes = await _persist_upload_to_tempfile(csv_file)
@@ -208,6 +213,7 @@ async def ingest_csv(csv_file: UploadFile = File(...), db: Session = Depends(get
         )
 
         dataset = Dataset(
+            user_id=current_user.id,
             file_name=csv_file.filename or "uploaded.csv",
             table_name=table_name,
             column_defs=column_defs,
