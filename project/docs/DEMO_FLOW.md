@@ -10,21 +10,33 @@ Bu doküman, projeyi **tarayıcıdan** veya **API ile** denemek içindir. Varsay
 
 | Sıra | Ne olur | Kullanılan uçlar |
 |-----|---------|------------------|
-| 1 | CSV: **Ecommerce Churn Demo**, **Uplift Campaign Demo** veya kendi dosya | `POST /ingest/csv`, `POST /profile/{table_name}` |
+| 1 | CSV: **Churn / Uplift / Segmentasyon** demo butonları veya kendi dosya | `POST /ingest/csv`, `POST /profile/{table_name}` |
 | 2–4 | Önizleme; validation + quality; şablon: `churn` \| `uplift` \| … | `GET /preview/...`, `GET /datasets/{id}/validation?template=…`, `GET /datasets/{id}/quality?template=…` |
 | 5–6 | Plan oluşturma (LLM + şema); içerik inceleme; **Planı onayla** | `POST /datasets/{id}/plans`, `POST /plans/{id}/approve` |
 | 7–8 | **Job başlat**; durum polling; tamamlanınca sonuç | `POST /plans/{id}/jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/result` |
 | 9 | Sonuç sayfasında metrikler; sağda **Explain** (otomatik + Yenile) | `POST /agent/explain` |
 
-**Demo butonları:** `public/demo/ecommerce_good.csv` (churn) ve `public/demo/uplift_campaign_demo.csv` (uplift). Uplift demosunda şablon olarak **uplift** seçin; plan mock’u kampanya kolonlarıyla uyumlu yanıt üretebilir (`LLM_PROVIDER=mock`).
+**Demo butonları** (`frontend/public/demo/`):
+
+| Buton | Dosya | Şablon |
+| ----- | ----- | ------ |
+| Churn Analizi | `ecommerce_good.csv` | `churn` (otomatik) |
+| Uplift Analizi | `hillstrom_uplift_demo.csv` | `uplift` (otomatik) |
+| Segmentasyon | `online_retail_II_demo.csv` | `segmentasyon` (otomatik) |
+
+`LLM_PROVIDER=mock` ile plan/explain deterministik çalışır.
 
 ### Senaryo A — Churn Demo
 
-1. **Ecommerce Churn Demo** → şablon `churn` (varsayılan) → plan `build_customer_rfm_features` → job → accuracy / churn_rate.
+1. **Churn Analizi** → `ecommerce_good.csv` → şablon `churn` → validation e-ticaret kuralları → plan `build_customer_rfm_features` → job.
 
-### Senaryo B — Uplift Campaign Demo
+### Senaryo B — Uplift Demo
 
-1. **Uplift Campaign Demo** → şablon **uplift** → validation/quality uplift kuralları → plan `build_uplift_customer_features` → job → uplift metrikleri (average_uplift, decile, hedef sayıları).
+1. **Uplift Analizi** → `hillstrom_uplift_demo.csv` → şablon **uplift** → validation uplift kuralları (treatment/outcome) → plan `build_uplift_customer_features` → job.
+
+### Senaryo C — Segmentasyon Demo
+
+1. **Segmentasyon** → `online_retail_II_demo.csv` → şablon **segmentasyon** → validation e-ticaret işlem kuralları → plan RFM / K-Means → job.
 
 **Anahtarsız demo:** Backend `.env` içinde `LLM_PROVIDER=mock` — plan ve explain deterministik mock yanıtları kullanır (dış LLM çağrısı yok).
 
@@ -83,7 +95,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/profile/$tableName" -Method Post
 $datasetId = 1
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/$datasetId/validation"
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/$datasetId/quality"
-# İsteğe bağlı: ?template=segmentasyon veya satis_tahmini
+# İsteğe bağlı: ?template=segmentasyon veya uplift
 ```
 
 ### 4. Plan oluşturma
@@ -153,5 +165,5 @@ Tarayıcı demosu varsayılan olarak **job akışını** kullanır.
 ## İlgili dokümanlar
 
 - **[`API_EXAMPLES.md`](API_EXAMPLES.md)** — uç listesi ve örnekler  
-- **[`ARCHITECTURE.md`](ARCHITECTURE.md)** — şablon mimarisi ve güvenlik  
+- **[`ARCHITECTURE_TR.md`](ARCHITECTURE_TR.md)** — şablon mimarisi ve güvenlik  
 - **[`DEPLOYMENT.md`](DEPLOYMENT.md)** — dağıtım seçenekleri  

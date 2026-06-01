@@ -1,14 +1,11 @@
 """
-Online Retail II CSV — müşteri bazlı demo örnekleme.
+Online Retail II CSV — müşteri bazlı demo örnekleme (eski yöntem).
 
-Tüm transaction history korunur (satır bazlı random sample değil).
-Churn / customer feature engineering için transaction grain aynı kalır.
+Resmi demo için tercih: prepare_official_demo_datasets.py (75_000 geçerli işlem satırı).
 
-Run (repo kökünden veya backend'den):
-  python project/backend/scripts/sample_online_retail_by_customer.py
-  python scripts/sample_online_retail_by_customer.py   # cwd=backend
-
-Output varsayılan: project/datasets/demo/online_retail_II_demo.csv
+Run:
+  python project/backend/scripts/prepare_official_demo_datasets.py
+  python project/backend/scripts/sample_online_retail_by_customer.py  # alternatif: müşteri bandı
 """
 from __future__ import annotations
 

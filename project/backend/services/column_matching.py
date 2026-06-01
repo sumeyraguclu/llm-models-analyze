@@ -273,6 +273,19 @@ def merge_llm_column_map_with_hybrid(
         merged[std] = col
         used_cols.add(col)
 
+    # Uplift / şablon-özel standart alanlar (hibrit yalnızca e-ticaret tx kapsar)
+    for std, col in llm_column_map.items():
+        if std in ALL_STANDARDS or std in merged:
+            continue
+        if not isinstance(col, str) or not col.strip():
+            continue
+        if col not in allowed_profile_names:
+            continue
+        if col in used_cols:
+            continue
+        merged[std] = col
+        used_cols.add(col)
+
     return merged
 
 

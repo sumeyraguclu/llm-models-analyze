@@ -55,13 +55,13 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/profile/data_ab12cd34" -Method Pos
 
 **`GET /datasets/{dataset_id}/validation`**
 
-İsteğe bağlı query: **`template`** — `churn` (varsayılan) \| `segmentasyon` \| `satis_tahmini` \| **`uplift`**.
+İsteğe bağlı query: **`template`** — `churn` (varsayılan) \| `segmentasyon` \| **`uplift`**.
 
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/1/validation"
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/1/validation?template=segmentasyon"
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/ingest/csv" -Method Post `
-  -Form @{ csv_file = Get-Item "project\datasets\demo\uplift_campaign_demo.csv" }
+  -Form @{ csv_file = Get-Item "project\datasets\demo\hillstrom_uplift_demo.csv" }
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/1/validation?template=uplift"
 ```
 
@@ -75,7 +75,7 @@ Aynı **`template`** query parametresi (varsayılan `churn`).
 
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/1/quality"
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/1/quality?template=satis_tahmini"
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/1/quality?template=segmentasyon"
 ```
 
 ---
@@ -218,6 +218,6 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/datasets/1"
 - Job/analyze uplift planı ile **T-Learner** eğitir; metrikler: `average_uplift`, `uplift_by_decile`, `recommended_target_count`, vb.
 - **Sınırlar:** customer-level campaign CSV; transaction-level uplift yok; causal inference iddiası yok.
 
-## TODO
+## Not
 
-- OpenAPI şemasından tam request/response alan listesi otomatik üretilebilir (`/docs` Swagger UI).
+OpenAPI şemasından tam request/response alan listesi `http://127.0.0.1:8000/docs` Swagger UI üzerinden görülebilir.

@@ -12,6 +12,9 @@ from services.ownership import require_owned_model
 from services.analysis_plan_generation import generate_validated_analysis_plan
 from services.dataset_access import require_dataset_with_profile
 from services.llm_client import call_llm
+from services.churn_explain import build_churn_explanation
+from services.segmentation_explain import build_segmentation_explanation
+from services.uplift_explain import build_uplift_explanation
 
 router = APIRouter()
 
@@ -220,6 +223,18 @@ def explain_model_results(payload: ExplainRequest, current_user: CurrentUser, db
         model_row = require_owned_model(db, current_user, payload.model_id)
         if model_row.status != "completed" or not model_row.metrics:
             raise HTTPException(status_code=400, detail="Model metrikleri hazır değil (completed + metrics gerekli).")
+
+        if model_row.template == "uplift":
+            obj = build_uplift_explanation(dict(model_row.metrics or {}))
+            return _validate_explanation(_normalize_explain_dict(obj))
+
+        if model_row.template == "churn":
+            obj = build_churn_explanation(dict(model_row.metrics or {}))
+            return _validate_explanation(_normalize_explain_dict(obj))
+
+        if model_row.template == "segmentasyon":
+            obj = build_segmentation_explanation(dict(model_row.metrics or {}))
+            return _validate_explanation(_normalize_explain_dict(obj))
 
         table_name = model_row.dataset.table_name if model_row.dataset else None
 

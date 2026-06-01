@@ -25,6 +25,19 @@ type AppState =
       dataWarning: string | null;
     };
 
+function planUserGoalForTemplate(template?: string): string | undefined {
+  if (template === "uplift") {
+    return "recommended_template uplift. customer-level campaign data with treatment and outcome columns.";
+  }
+  if (template === "segmentasyon") {
+    return "recommended_template segmentasyon. ecommerce transaction rows for customer segmentation.";
+  }
+  if (template === "churn") {
+    return "recommended_template churn. ecommerce transaction rows for customer churn.";
+  }
+  return undefined;
+}
+
 function railStageForState(state: AppState): DemoStageKey {
   if (state.stage === "upload") return "upload";
   if (state.stage === "dataset") return "dataset";
@@ -85,7 +98,12 @@ export default function App() {
                 stage: "dataset",
                 datasetId: ingest.dataset_id,
                 tableName: ingest.table_name,
-                preferredTemplate: demoScenario === "uplift" ? "uplift" : "churn",
+                preferredTemplate:
+                  demoScenario === "uplift"
+                    ? "uplift"
+                    : demoScenario === "segmentasyon"
+                      ? "segmentasyon"
+                      : "churn",
               })
             }
           />
@@ -93,19 +111,17 @@ export default function App() {
 
         {state.stage === "dataset" && (
           <DatasetPage
+            key={`${state.datasetId}-${state.preferredTemplate ?? "churn"}`}
             datasetId={state.datasetId}
             tableName={state.tableName}
             initialTemplate={state.preferredTemplate ?? "churn"}
-            onStartAnalysis={() =>
+            onStartAnalysis={(selectedTemplate) =>
               setState({
                 stage: "plan",
                 datasetId: state.datasetId,
                 tableName: state.tableName,
-                preferredTemplate: state.preferredTemplate,
-                planUserGoal:
-                  state.preferredTemplate === "uplift"
-                    ? "uplift campaign CampaignSent Purchased customer_level"
-                    : undefined,
+                preferredTemplate: selectedTemplate,
+                planUserGoal: planUserGoalForTemplate(selectedTemplate),
               })
             }
           />
@@ -134,6 +150,7 @@ export default function App() {
           <PlanPage
             datasetId={state.datasetId}
             tableName={state.tableName}
+            preferredTemplate={state.preferredTemplate}
             userGoal={state.planUserGoal}
             onApprove={(planId, plan) =>
               setState({ stage: "jobRun", datasetId: state.datasetId, planId, plan })

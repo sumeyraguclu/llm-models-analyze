@@ -11,14 +11,13 @@ const TEMPLATE_OPTIONS = [
   { value: "churn", label: "churn — müşteri kaybı (işlem satırları)" },
   { value: "uplift", label: "uplift — kampanya etkisi (müşteri/kampanya satırı)" },
   { value: "segmentasyon", label: "segmentasyon" },
-  { value: "satis_tahmini", label: "satis_tahmini" },
 ] as const;
 
 interface DatasetPageProps {
   datasetId: number;
   tableName: string;
   initialTemplate?: string;
-  onStartAnalysis: () => void;
+  onStartAnalysis: (selectedTemplate: string) => void;
 }
 
 export default function DatasetPage({
@@ -28,6 +27,10 @@ export default function DatasetPage({
   onStartAnalysis,
 }: DatasetPageProps) {
   const [template, setTemplate] = useState<string>(initialTemplate);
+
+  useEffect(() => {
+    setTemplate(initialTemplate);
+  }, [initialTemplate]);
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
   const [previewLoading, setPreviewLoading] = useState(true);
   const [vqLoading, setVqLoading] = useState(false);
@@ -60,6 +63,8 @@ export default function DatasetPage({
     const load = async () => {
       setVqLoading(true);
       setError(null);
+      setValidation(null);
+      setQuality(null);
       try {
         const [vr, qr] = await Promise.all([
           getDatasetValidation(datasetId, template),
@@ -85,6 +90,13 @@ export default function DatasetPage({
   const qualityLevelLabel =
     quality?.level === "good" ? "İyi" : quality?.level === "warning" ? "Uyarı" : quality?.level === "poor" ? "Zayıf" : "—";
 
+  const validationModeLabel =
+    template === "uplift"
+      ? "Uplift (kampanya müşteri satırı)"
+      : template === "segmentasyon"
+        ? "Segmentasyon (e-ticaret işlem satırları)"
+        : "Churn (e-ticaret işlem satırları)";
+
   return (
     <div className="animate-fadeIn">
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Adım 2–4 / 9 — Önizleme, validation, quality</p>
@@ -99,8 +111,8 @@ export default function DatasetPage({
           <p className="mt-1 font-mono text-xs text-muted">dataset_id: {datasetId}</p>
           <p className="font-mono text-xs text-muted">table_name: {tableName}</p>
         </div>
-        <Button variant="primary" onClick={onStartAnalysis}>
-          5. Plan adımına geç →
+        <Button variant="primary" onClick={() => onStartAnalysis(template)}>
+          5. Plan adımına geç ({template}) →
         </Button>
       </div>
 
@@ -171,6 +183,9 @@ export default function DatasetPage({
 
         <Card>
           <h2 className="text-lg font-semibold">3–4. Validation &amp; quality</h2>
+          <p className="mt-1 text-xs text-muted">
+            Aktif şablon: <strong className="text-text">{template}</strong> · {validationModeLabel}
+          </p>
           {validation && (
             <p className="mt-2 text-sm">
               Geçerli:{" "}

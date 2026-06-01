@@ -19,6 +19,7 @@ router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 class CreatePlanBody(BaseModel):
     user_goal: str | None = None
+    template: str | None = None
 
 
 class PlanListItem(BaseModel):
@@ -48,6 +49,10 @@ def create_dataset_plan(
     """
     require_owned_dataset(db, current_user, dataset_id)
     user_goal = body.user_goal if body else None
+    template_hint = body.template.strip() if body and body.template else None
+    if template_hint:
+        prefix = f"Kullanıcı seçili şablon: {template_hint}. Plan mutlaka bu şablona uygun olmalı.\n"
+        user_goal = f"{prefix}{user_goal}" if user_goal else prefix.strip()
     plan_dump, mapping, warnings = generate_validated_analysis_plan(
         db, current_user, dataset_id, user_goal
     )
@@ -114,7 +119,7 @@ def get_dataset_validation(
     current_user: CurrentUser,
     template: str = Query(
         "churn",
-        description="Şablon: churn | segmentasyon | satis_tahmini | uplift",
+        description="Şablon: churn | segmentasyon | uplift",
     ),
     db: Session = Depends(get_db),
 ):

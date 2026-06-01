@@ -7,12 +7,20 @@ import { Badge, Button, Card, Divider, Skeleton, Spinner } from "./ui";
 interface PlanPageProps {
   datasetId: number;
   tableName: string;
+  preferredTemplate?: string;
   userGoal?: string;
   onApprove: (planId: number, plan: AnalysisPlan) => void;
   onBack: () => void;
 }
 
-export default function PlanPage({ datasetId, tableName, userGoal, onApprove, onBack }: PlanPageProps) {
+export default function PlanPage({
+  datasetId,
+  tableName,
+  preferredTemplate,
+  userGoal,
+  onApprove,
+  onBack,
+}: PlanPageProps) {
   const [planId, setPlanId] = useState<number | null>(null);
   const [plan, setPlan] = useState<AnalysisPlan | null>(null);
   const [mappingConfidence, setMappingConfidence] = useState<Record<string, unknown> | null>(null);
@@ -25,7 +33,10 @@ export default function PlanPage({ datasetId, tableName, userGoal, onApprove, on
     setLoading(true);
     setError(null);
     try {
-      const res = await createPlanSnapshot(datasetId, userGoal);
+      const res = await createPlanSnapshot(datasetId, {
+        userGoal,
+        template: preferredTemplate,
+      });
       setPlanId(res.plan_id);
       setPlan(res.plan);
       setMappingConfidence(res.mapping_confidence ?? null);

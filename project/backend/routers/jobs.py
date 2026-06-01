@@ -83,3 +83,138 @@ def get_job_result(job_id: int, current_user: CurrentUser, db: Session = Depends
         "summary": j.result_summary,
         "data_warning": top_dw if isinstance(top_dw, str) and top_dw else None,
     }
+
+
+@router.get("/{job_id}/target-list")
+def get_job_target_list(job_id: int, current_user: CurrentUser, db: Session = Depends(get_db)):
+    """Tamamlanan uplift işi için hedef listesi (job metrics içinden)."""
+    j = require_owned_job(db, current_user, job_id)
+    if j.status != "completed":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "job_not_completed",
+                "status": j.status,
+                "message": "Hedef listesi yalnızca tamamlanan işler için kullanılabilir.",
+            },
+        )
+    if not j.result_model_run_id:
+        raise HTTPException(status_code=500, detail="Job tamamlandı ancak model_run_id eksik.")
+    mr = require_owned_model(db, current_user, j.result_model_run_id)
+    if mr.template != "uplift":
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "not_uplift_job",
+                "message": "Hedef listesi yalnızca uplift şablonu işleri için kullanılabilir.",
+            },
+        )
+    metrics = mr.metrics if isinstance(mr.metrics, dict) else {}
+    target_list = metrics.get("target_list")
+    if not isinstance(target_list, list) or not target_list:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "target_list_unavailable",
+                "message": "Bu iş için hedef listesi bulunamadı.",
+            },
+        )
+    return [
+        {
+            "customer_id": row.get("customer_id"),
+            "uplift_score": row.get("uplift_score"),
+            "action_label": row.get("action_label"),
+        }
+        for row in target_list
+        if isinstance(row, dict)
+    ]
+
+
+@router.get("/{job_id}/risk-list")
+def get_job_risk_list(job_id: int, current_user: CurrentUser, db: Session = Depends(get_db)):
+    """Tamamlanan churn işi için risk listesi (job metrics içinden)."""
+    j = require_owned_job(db, current_user, job_id)
+    if j.status != "completed":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "job_not_completed",
+                "status": j.status,
+                "message": "Risk listesi yalnızca tamamlanan işler için kullanılabilir.",
+            },
+        )
+    if not j.result_model_run_id:
+        raise HTTPException(status_code=500, detail="Job tamamlandı ancak model_run_id eksik.")
+    mr = require_owned_model(db, current_user, j.result_model_run_id)
+    if mr.template != "churn":
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "not_churn_job",
+                "message": "Risk listesi yalnızca churn şablonu işleri için kullanılabilir.",
+            },
+        )
+    metrics = mr.metrics if isinstance(mr.metrics, dict) else {}
+    risk_list = metrics.get("risk_list")
+    if not isinstance(risk_list, list) or not risk_list:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "risk_list_unavailable",
+                "message": "Bu iş için risk listesi bulunamadı.",
+            },
+        )
+    return [
+        {
+            "customer_id": row.get("customer_id"),
+            "churn_probability": row.get("churn_probability"),
+            "risk_label": row.get("risk_label"),
+        }
+        for row in risk_list
+        if isinstance(row, dict)
+    ]
+
+
+@router.get("/{job_id}/segment-list")
+def get_job_segment_list(job_id: int, current_user: CurrentUser, db: Session = Depends(get_db)):
+    """Tamamlanan segmentasyon işi için müşteri segment listesi (job metrics içinden)."""
+    j = require_owned_job(db, current_user, job_id)
+    if j.status != "completed":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "job_not_completed",
+                "status": j.status,
+                "message": "Segment listesi yalnızca tamamlanan işler için kullanılabilir.",
+            },
+        )
+    if not j.result_model_run_id:
+        raise HTTPException(status_code=500, detail="Job tamamlandı ancak model_run_id eksik.")
+    mr = require_owned_model(db, current_user, j.result_model_run_id)
+    if mr.template != "segmentasyon":
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "not_segmentation_job",
+                "message": "Segment listesi yalnızca segmentasyon şablonu işleri için kullanılabilir.",
+            },
+        )
+    metrics = mr.metrics if isinstance(mr.metrics, dict) else {}
+    segment_list = metrics.get("segment_list")
+    if not isinstance(segment_list, list) or not segment_list:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "segment_list_unavailable",
+                "message": "Bu iş için segment listesi bulunamadı.",
+            },
+        )
+    return [
+        {
+            "customer_id": row.get("customer_id"),
+            "segment_id": row.get("segment_id"),
+            "segment_name": row.get("segment_name"),
+        }
+        for row in segment_list
+        if isinstance(row, dict)
+    ]

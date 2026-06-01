@@ -14,7 +14,7 @@ export interface UpliftOptions {
 
 export interface AnalysisPlan {
   /** Normalize edilmiş şablon; LLM ham çıktısında `recommended_template` de gelebilir. */
-  template: string; // "churn" | "uplift" | "satis_tahmini" | "segmentasyon"
+  template: string; // "churn" | "uplift" | "segmentasyon"
   recommended_template?: string;
   column_map: Record<string, string>; // standart alan adı → CSV kolon adı
   cleaning_steps: string[];

@@ -8,6 +8,12 @@ from sklearn.metrics import silhouette_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from ml.segmentation_personas import (
+    PERSONA_HIGH_VALUE,
+    SEGMENT_LIST_SIZE_MVP_WARNING,
+    build_segment_outputs,
+)
+
 
 class SegmentationPipeline:
     def __init__(self):
@@ -23,6 +29,8 @@ class SegmentationPipeline:
 
         self._silhouette: float | None = None
         self._segment_name_map: dict[int, str] | None = None
+        self._full_df: pd.DataFrame | None = None
+        self._segment_ids: np.ndarray | None = None
         self._last_metrics: dict | None = None
 
     def _prepare(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -146,9 +154,11 @@ class SegmentationPipeline:
         self.optimal_k = int(best_k)
         self._silhouette = float(best_score)
 
-        # segment naming map
-        segments = self.model.labels_
-        self._segment_name_map = self._build_segment_name_map(df, segments)
+        segments = np.asarray(self.model.labels_, dtype=int)
+        self._segment_ids = segments
+        self._full_df = df.copy()
+        persona_pack = build_segment_outputs(df, segments, optimal_k=int(best_k))
+        self._segment_name_map = dict(persona_pack.get("segment_name_by_id") or {})
 
         self.is_fitted = True
         self._last_metrics = None
@@ -170,29 +180,23 @@ class SegmentationPipeline:
         if not self.is_fitted or self.model is None or self.optimal_k is None:
             raise ValueError("metrics() çağırmadan önce fit() çağrılmalı.")
 
-        pred = self.predict(df)
-        labels = pred["segment_labels"]
+        score_df = self._full_df if self._full_df is not None else df
+        seg_ids = self._segment_ids
+        if seg_ids is None:
+            seg_ids = np.asarray(self.model.labels_, dtype=int)
 
-        distribution: dict[str, int] = {}
-        for label in labels:
-            distribution[label] = distribution.get(label, 0) + 1
-
-        base_actions: dict[str, str] = {
-            "VIP Müşteriler": "Sadakat programı ve erken erişim kampanyaları önerin. Kaybetme maliyeti yüksek.",
-            "Büyük Alışveriş Yapanlar": "Sepet terk e-postası ve ücretsiz kargo eşiği düşürme deneyin.",
-            "Sadık Müşteriler": "Sıklık artırıcı kampanyalar: 'Bir al bir al' veya puan sistemi.",
-            "Pasif Müşteriler": "Win-back kampanyası: büyük indirim veya segment'ten çıkar.",
-        }
+        persona_pack = build_segment_outputs(score_df, seg_ids, optimal_k=int(self.optimal_k))
 
         segment_actions: dict[str, str] = {}
-        for label in distribution.keys():
-            for base, action in base_actions.items():
-                if str(label).startswith(base):
-                    segment_actions[str(label)] = action
-                    break
+        for persona in persona_pack.get("segment_personas") or []:
+            if not isinstance(persona, dict):
+                continue
+            name = str(persona.get("segment_name", ""))
+            actions = persona.get("recommended_actions")
+            if name and isinstance(actions, list) and actions:
+                segment_actions[name] = str(actions[0])
 
-        # segment profiles from provided df
-        df_copy = df.copy()
+        df_copy = score_df.copy()
         if "last_order_date" in df_copy.columns and "days_since_last_order" not in df_copy.columns:
             df_copy["last_order_date"] = pd.to_datetime(df_copy["last_order_date"], errors="coerce")
             today = pd.Timestamp.today().normalize()
@@ -203,13 +207,13 @@ class SegmentationPipeline:
         if "days_since_last_order" not in df_copy.columns:
             df_copy["days_since_last_order"] = np.nan
 
-        df_copy["__segment_label__"] = labels
+        name_by_id = persona_pack.get("segment_name_by_id") or {}
+        df_copy["__segment_label__"] = [name_by_id.get(int(s), f"Segment {int(s)}") for s in seg_ids]
         profiles = (
             df_copy.groupby("__segment_label__")[["total_spent", "order_count"]]
             .mean(numeric_only=True)
             .rename(columns={"total_spent": "mean_spent", "order_count": "mean_orders"})
         )
-
         segment_profiles = {
             str(seg_label): {
                 "mean_spent": float(row["mean_spent"]),
@@ -218,12 +222,24 @@ class SegmentationPipeline:
             for seg_label, row in profiles.iterrows()
         }
 
+        metric_warnings: list[str] = []
+        if persona_pack.get("segment_list"):
+            metric_warnings.append(
+                "segment_list bu işin veri setindeki tüm müşterileri kapsar; yeni veri seti için yeni job gerekir."
+            )
+            metric_warnings.append(SEGMENT_LIST_SIZE_MVP_WARNING)
+
         result = {
             "silhouette_score": float(self._silhouette) if self._silhouette is not None else 0.0,
             "optimal_k": int(self.optimal_k),
-            "segment_distribution": distribution,
+            "segment_summary": persona_pack.get("segment_summary"),
+            "segment_personas": persona_pack.get("segment_personas"),
+            "segment_list": persona_pack.get("segment_list"),
+            "segment_insights": persona_pack.get("segment_insights"),
+            "segment_distribution": persona_pack.get("segment_distribution"),
             "segment_profiles": segment_profiles,
             "segment_actions": segment_actions,
+            "metric_warnings": metric_warnings,
         }
         self._last_metrics = result
         return result
@@ -236,7 +252,7 @@ class SegmentationPipeline:
         total = sum(dist.values()) or 1
         largest_label = max(dist, key=dist.get) if dist else "Bilinmiyor"
         largest_pct = round((dist.get(largest_label, 0) / total) * 100, 1)
-        vip_pct = round((dist.get("VIP Müşteriler", 0) / total) * 100, 1)
+        vip_pct = round((dist.get(PERSONA_HIGH_VALUE, 0) / total) * 100, 1)
 
         return (
             f"Müşteriler {int(self._last_metrics['optimal_k'])} gruba ayrıldı. "

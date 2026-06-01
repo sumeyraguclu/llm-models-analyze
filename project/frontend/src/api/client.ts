@@ -105,7 +105,7 @@ export async function getPreview(tableName: string, limit = 20): Promise<Preview
   return response.data;
 }
 
-/** GET /datasets/{id}/validation — `template`: churn | uplift | segmentasyon | satis_tahmini (varsayılan churn). */
+/** GET /datasets/{id}/validation — `template`: churn | uplift | segmentasyon (varsayılan churn). */
 export async function getDatasetValidation(datasetId: number, template = "churn"): Promise<ValidationReport> {
   const response = await api.get<ValidationReport>(`/datasets/${datasetId}/validation`, {
     params: { template },
@@ -138,9 +138,13 @@ export async function getAnalysisPlan(datasetId: number, userGoal?: string): Pro
 }
 
 /** Önerilen akış: plan snapshot oluştur (draft), incele, sonra approve. */
-export async function createPlanSnapshot(datasetId: number, userGoal?: string): Promise<CreatePlanResponse> {
+export async function createPlanSnapshot(
+  datasetId: number,
+  options?: { userGoal?: string; template?: string },
+): Promise<CreatePlanResponse> {
   const response = await api.post<CreatePlanResponse>(`/datasets/${datasetId}/plans`, {
-    user_goal: userGoal ?? null,
+    user_goal: options?.userGoal ?? null,
+    template: options?.template ?? null,
   });
   return response.data;
 }

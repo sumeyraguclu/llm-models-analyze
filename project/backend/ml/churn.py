@@ -11,6 +11,14 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from ml.churn_insights import compute_retention_insights
+from ml.churn_scoring import (
+    RISK_LIST_SIZE_MVP_WARNING,
+    build_risk_rows,
+    summarize_risk_labels,
+    top_customers_by_risk,
+)
+
 # Model yalnızca bu sayısal iş kolu feature'larını kullanır (metadata / hedef sızıntısı engeli)
 FEATURE_ALLOWLIST: frozenset[str] = frozenset(
     {
@@ -49,6 +57,27 @@ def _ordered_feature_columns(df: pd.DataFrame) -> list[str]:
     return [c for c in out if c in FEATURE_ALLOWLIST]
 
 
+def _stratified_random_split(
+    X: pd.DataFrame,
+    y: pd.Series,
+    *,
+    test_size: float,
+    split_warnings: list[str],
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, str, list[str]]:
+    try:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=42, stratify=y
+        )
+        strat = "stratified_random"
+    except ValueError:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=42, stratify=None
+        )
+        strat = "random_no_stratify"
+        split_warnings.append("Stratified split uygulanamadı (sınıf sayısı yetersiz); stratify olmadan bölündü.")
+    return X_train, X_test, y_train, y_test, strat, split_warnings
+
+
 def _split_train_test(
     X: pd.DataFrame,
     y: pd.Series,
@@ -69,33 +98,28 @@ def _split_train_test(
             split_warnings.append("Temporal split: test kümesi çok küçük (<5 gözlem).")
         test_idx = meta.index[-n_test:]
         train_idx = meta.index[:-n_test]
-        return (
-            X.loc[train_idx],
-            X.loc[test_idx],
-            y.loc[train_idx],
-            y.loc[test_idx],
-            "temporal_last_order_date",
-            split_warnings,
+        y_train_temp = y.loc[train_idx]
+        y_test_temp = y.loc[test_idx]
+        if y_train_temp.nunique() >= 2 and y_test_temp.nunique() >= 2:
+            return (
+                X.loc[train_idx],
+                X.loc[test_idx],
+                y_train_temp,
+                y_test_temp,
+                "temporal_last_order_date",
+                split_warnings,
+            )
+        split_warnings.append(
+            "Temporal split train veya test kümesinde tek churn sınıfı bıraktı "
+            "(ör. tüm test müşterileri aynı recency); stratified random split kullanıldı."
         )
-
-    if dates is None or dates.notna().sum() < min_temporal_valid:
+    elif dates is None or dates.notna().sum() < min_temporal_valid:
         split_warnings.append(
             "Temporal split kullanılamıyor (last_order_date yok veya çok eksik); "
             "stratified split kullanıldı. Zaman bazlı sızıntı riski için tarih kolonu önerilir."
         )
-    try:
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=42, stratify=y
-        )
-        strat = "stratified_random"
-    except ValueError:
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=42, stratify=None
-        )
-        strat = "random_no_stratify"
-        split_warnings.append("Stratified split uygulanamadı (sınıf sayısı yetersiz); stratify olmadan bölündü.")
 
-    return X_train, X_test, y_train, y_test, strat, split_warnings
+    return _stratified_random_split(X, y, test_size=test_size, split_warnings=split_warnings)
 
 
 def _class_distribution(y: pd.Series) -> dict[str, int]:
@@ -168,6 +192,7 @@ class ChurnPipeline:
         self._baseline_metrics: dict | None = None
         self._train_size: int = 0
         self._test_size: int = 0
+        self._full_df: pd.DataFrame | None = None
 
     def _validate_required_columns(self, df: pd.DataFrame) -> None:
         has_recency = any(c in df.columns for c in ["recency", "recency_days", "days_since_last_order"])
@@ -232,6 +257,7 @@ class ChurnPipeline:
         return _PreparedData(X=X, y=y, feature_names=feature_names)
 
     def fit(self, df: pd.DataFrame) -> None:
+        self._full_df = df.copy() if "customer_id" in df.columns else None
         prepared = self._prepare(df, for_training=True)
         assert prepared.y is not None
 
@@ -260,6 +286,41 @@ class ChurnPipeline:
             recency_col=self._recency_col,
         )
         self._last_metrics = None
+
+    def generate_risk_list(self, df: pd.DataFrame | None = None) -> list[dict]:
+        if not self.is_fitted:
+            raise ValueError("generate_risk_list() için önce fit() çağrılmalı.")
+        score_df = self._full_df if df is None else df
+        if score_df is None or score_df.empty or "customer_id" not in score_df.columns:
+            raise ValueError("Risk listesi için customer_id içeren müşteri tablosu gerekli.")
+        prepared = self._prepare(score_df, for_training=False)
+        proba_matrix = self.model.predict_proba(prepared.X)
+        clf = self.model.named_steps["clf"]
+        classes = list(getattr(clf, "classes_", [0, 1]))
+        if 1 in classes:
+            churn_idx = classes.index(1)
+            proba = proba_matrix[:, churn_idx]
+        else:
+            proba = np.zeros(len(prepared.X), dtype=float)
+        return build_risk_rows(score_df["customer_id"].to_numpy(), proba)
+
+    def _risk_list_outputs(self) -> dict:
+        if self._full_df is None or "customer_id" not in self._full_df.columns:
+            return {
+                "risk_summary": {"high_risk_count": 0, "medium_risk_count": 0, "low_risk_count": 0},
+                "risk_list": [],
+                "top_risk_customers": [],
+                "retention_insights": [],
+            }
+        risk_list = self.generate_risk_list()
+        labels = [r["risk_label"] for r in risk_list]
+        retention_insights = compute_retention_insights(self._full_df, risk_list)
+        return {
+            "risk_summary": summarize_risk_labels(labels),
+            "risk_list": risk_list,
+            "top_risk_customers": top_customers_by_risk(risk_list, limit=5),
+            "retention_insights": retention_insights,
+        }
 
     def predict(self, df: pd.DataFrame) -> dict:
         if not self.is_fitted:
@@ -356,6 +417,13 @@ class ChurnPipeline:
                 "Perfect metrics detected; possible leakage, çok küçük test seti veya aşırı uyum — sonuçları doğrulayın."
             )
 
+        risk_outputs = self._risk_list_outputs()
+        if risk_outputs.get("risk_list"):
+            metric_warnings.append(
+                "risk_list bu işin müşteri tablosundaki tüm kayıtlar içindir; yeni veri seti skorlaması desteklenmez."
+            )
+            metric_warnings.append(RISK_LIST_SIZE_MVP_WARNING)
+
         result = {
             "accuracy": acc,
             "precision": prec,
@@ -370,6 +438,10 @@ class ChurnPipeline:
             "split_strategy": self._split_strategy,
             "feature_columns_used": list(self._feature_names or []),
             "baselines": baselines,
+            "risk_summary": risk_outputs["risk_summary"],
+            "risk_list": risk_outputs["risk_list"],
+            "top_risk_customers": risk_outputs["top_risk_customers"],
+            "retention_insights": risk_outputs.get("retention_insights") or [],
             "metric_warnings": metric_warnings,
         }
         self._last_metrics = result

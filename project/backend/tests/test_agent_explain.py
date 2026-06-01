@@ -32,7 +32,7 @@ def test_explain_malformed_json_returns_500(
         db.refresh(ds)
         m = AIModel(
             dataset_id=ds.id,
-            template="churn",
+            template="legacy_llm_explain",
             column_map={"customer_id": "Customer ID"},
             metrics={"accuracy": 0.81},
             status="completed",
@@ -79,7 +79,7 @@ def test_explain_success_with_fake_llm_json(
         db.refresh(ds)
         m = AIModel(
             dataset_id=ds.id,
-            template="churn",
+            template="legacy_llm_explain",
             column_map={"customer_id": "Customer ID"},
             metrics={"accuracy": 0.81, "f1": 0.5},
             status="completed",

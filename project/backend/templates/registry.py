@@ -6,7 +6,6 @@ from typing import Any
 
 from templates.base import MlTemplate
 from templates.churn import ChurnTemplate
-from templates.sales_forecast import SalesForecastTemplate
 from templates.segmentation import SegmentationTemplate
 from templates.uplift import UpliftTemplate
 
@@ -19,7 +18,6 @@ def _ensure_registry() -> dict[str, MlTemplate]:
         instances: list[MlTemplate] = [
             ChurnTemplate(),
             SegmentationTemplate(),
-            SalesForecastTemplate(),
             UpliftTemplate(),
         ]
         _REGISTRY = {t.name: t for t in instances}

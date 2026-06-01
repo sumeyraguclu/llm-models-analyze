@@ -43,6 +43,7 @@ def _mock_uplift_plan() -> str:
             "treatment_positive_value": 1,
             "outcome_positive_value": 1,
             "min_outcome_rate": 0.01,
+            "target_threshold": 0.001,
         },
         "confidence": 0.85,
         "requires_user_confirmation": False,
@@ -242,10 +243,7 @@ def _call_gemini(prompt: str) -> str:
 def _clean_llm_response(text: str) -> str:
     """
     Gemini bazen JSON'u ```json ...``` içine sarabilir.
-    Bu helper:
-    - code fence'leri temizler
-    - whitespace kırpar
-    - mümkünse sadece JSON objeyi döndürür
+    Code fence'leri temizler, whitespace kırpar ve mümkünse yalnızca JSON objesini döndürür.
     """
     if text is None:
         return ""

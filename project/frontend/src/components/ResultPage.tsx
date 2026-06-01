@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { explainModel, formatApiError } from "../api/client";
 import type { Explanation, ModelMetrics } from "../types";
+import ChurnResultView from "./ChurnResultView";
+import SegmentResultView from "./SegmentResultView";
 import UpliftHelpText from "./UpliftHelpText";
 import UpliftResultView from "./UpliftResultView";
 import { Badge, Button, Card, Spinner } from "./ui";
@@ -52,6 +54,29 @@ const METRIC_ENTRY_SKIP = new Set([
   "n_samples",
   "uplift_by_decile",
   "top_customers",
+  "target_list",
+  "target_summary",
+  "segment_insights",
+  "segment_summary",
+  "segment_personas",
+  "segment_list",
+  "segment_distribution",
+  "segment_profiles",
+  "segment_actions",
+  "optimal_k",
+  "silhouette_score",
+  "risk_list",
+  "risk_summary",
+  "retention_insights",
+  "top_risk_customers",
+  "evaluation",
+  "training_diagnostics",
+  "leakage_guard",
+  "auuc",
+  "qini_coefficient",
+  "uplift_curve",
+  "target_threshold",
+  "do_not_target_threshold",
   "warnings",
   "feature_columns_used",
   "model_type",
@@ -75,16 +100,23 @@ export default function ResultPage({
   const [explainError, setExplainError] = useState<string | null>(null);
 
   const isUplift = template === "uplift";
+  const isChurn = template === "churn";
+  const isSegment = template === "segmentasyon";
   const upliftGoal =
     isUplift && typeof m.average_uplift === "number"
       ? `Uplift analizi: average_uplift=${m.average_uplift}, top_decile=${m.top_decile_uplift}, recommended_target=${m.recommended_target_count}`
       : undefined;
+  const churnGoal =
+    isChurn && typeof m.accuracy === "number"
+      ? `Churn analizi: accuracy=${m.accuracy}, churn_rate=${m.churn_rate}`
+      : undefined;
+  const explainUserGoal = upliftGoal ?? churnGoal;
 
   const loadExplain = useCallback(async () => {
     setExplainLoading(true);
     setExplainError(null);
     try {
-      const ex = await explainModel(modelId, upliftGoal);
+      const ex = await explainModel(modelId, explainUserGoal);
       setExplanation(ex);
     } catch (err) {
       setExplanation(null);
@@ -92,7 +124,7 @@ export default function ResultPage({
     } finally {
       setExplainLoading(false);
     }
-  }, [modelId, upliftGoal]);
+  }, [modelId, explainUserGoal]);
 
   useEffect(() => {
     void loadExplain();
@@ -191,9 +223,37 @@ export default function ResultPage({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
         <div className="space-y-4">
-          {isUplift && <UpliftResultView metrics={metrics} />}
+          {isUplift && (
+            <UpliftResultView
+              metrics={metrics}
+              explanation={explanation}
+              explainLoading={explainLoading}
+              explainError={explainError}
+              onReloadExplain={() => void loadExplain()}
+            />
+          )}
 
-          {!isUplift && segments && segments.length > 0 && (
+          {isChurn && (
+            <ChurnResultView
+              metrics={metrics}
+              explanation={explanation}
+              explainLoading={explainLoading}
+              explainError={explainError}
+              onReloadExplain={() => void loadExplain()}
+            />
+          )}
+
+          {isSegment && (
+            <SegmentResultView
+              metrics={metrics}
+              explanation={explanation}
+              explainLoading={explainLoading}
+              explainError={explainError}
+              onReloadExplain={() => void loadExplain()}
+            />
+          )}
+
+          {!isUplift && !isChurn && !isSegment && segments && segments.length > 0 && (
             <Card>
               <h2 className="text-lg font-semibold">Segmentler ve önerilen aksiyonlar</h2>
               <p className="mt-1 text-sm text-muted">Hangi segmente ne yapmalıyım?</p>
@@ -250,7 +310,7 @@ export default function ResultPage({
             </Card>
           )}
 
-          {!isUplift && (
+          {!isUplift && !isChurn && !isSegment && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {accuracy !== null && (
               <Card hover>
@@ -309,7 +369,7 @@ export default function ResultPage({
             </Card>
           )}
 
-          {!isUplift && topFeatures && topFeatures.length > 0 && (
+          {!isUplift && !isChurn && !isSegment && topFeatures && topFeatures.length > 0 && (
             <Card>
               <h2 className="text-lg font-semibold">Özellik önemi (feature importance)</h2>
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-text">
@@ -323,6 +383,7 @@ export default function ResultPage({
           )}
         </div>
 
+        {!isUplift && !isChurn && !isSegment && (
         <Card className="border-accent/30 lg:sticky lg:top-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold">9. Explain (LLM)</h2>
@@ -374,6 +435,7 @@ export default function ResultPage({
             </div>
           )}
         </Card>
+        )}
       </div>
 
       <div className="pt-6">

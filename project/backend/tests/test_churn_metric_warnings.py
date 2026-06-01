@@ -15,6 +15,7 @@ def test_small_test_set_emits_variance_warning():
     churn = (rec > 90).astype(np.int64)
     df = pd.DataFrame(
         {
+            "customer_id": [f"c{i}" for i in range(n)],
             "recency": rec,
             "monetary": rng.uniform(50.0, 5000.0, size=n),
             "churn": churn,

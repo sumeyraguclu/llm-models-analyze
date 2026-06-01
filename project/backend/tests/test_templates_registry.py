@@ -11,10 +11,7 @@ from templates.registry import ensure_template_registered, get_template, get_tem
 def test_list_template_names_sorted():
     names = list_template_names()
     assert names == tuple(sorted(names))
-    assert "churn" in names
-    assert "segmentasyon" in names
-    assert "satis_tahmini" in names
-    assert "uplift" in names
+    assert set(names) == {"churn", "segmentasyon", "uplift"}
 
 
 def test_get_template_execution_dict_churn():

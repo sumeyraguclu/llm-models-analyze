@@ -40,6 +40,10 @@ class UpliftOptions(BaseModel):
     min_group_size: int = 50
     min_outcome_rate: float = 0.01
     model_type: Literal["t_learner", "two_model_uplift"] = "t_learner"
+    test_size: float = 0.2
+    random_state: int = 42
+    target_threshold: float = 0.05
+    do_not_target_threshold: float = 0.0
 
     @field_validator("min_group_size")
     @classmethod
@@ -53,6 +57,20 @@ class UpliftOptions(BaseModel):
     def min_rate_range(cls, v: float):
         if v < 0.0 or v > 1.0:
             raise ValueError("min_outcome_rate 0.0-1.0 arasında olmalı")
+        return v
+
+    @field_validator("test_size")
+    @classmethod
+    def test_size_range(cls, v: float):
+        if v <= 0.05 or v >= 0.5:
+            raise ValueError("test_size 0.05 ile 0.5 arasında olmalı")
+        return v
+
+    @field_validator("do_not_target_threshold")
+    @classmethod
+    def do_not_threshold_range(cls, v: float):
+        if v < -1.0 or v > 1.0:
+            raise ValueError("do_not_target_threshold -1.0 ile 1.0 arasında olmalı")
         return v
 
 
@@ -151,17 +169,17 @@ class AnalysisPlanSchema(BaseModel):
     def uplift_required_column_map(self) -> Self:
         if self.template != "uplift":
             return self
-        if self.missing_required_columns:
-            return self
+        waived = {m for m in (self.missing_required_columns or []) if isinstance(m, str) and m.strip()}
         missing = [
             k
             for k in UPLIFT_REQUIRED_COLUMN_MAP
-            if k not in self.column_map or not str(self.column_map.get(k, "")).strip()
+            if k not in waived
+            and (k not in self.column_map or not str(self.column_map.get(k, "")).strip())
         ]
         if missing:
             raise ValueError(
                 f"uplift column_map eksik zorunlu alanlar: {missing}. "
-                "Eksikse missing_required_columns kullanın."
+                "Eksikse missing_required_columns içinde bildirin."
             )
         return self
 

@@ -4,7 +4,7 @@ import { createProfile, ingestCsv, type IngestResponse, type ProfileResponse } f
 import { formatApiError } from "../api/errors";
 import { Button, Card, Spinner } from "./ui";
 
-export type DemoScenario = "churn" | "uplift";
+export type DemoScenario = "churn" | "uplift" | "segmentasyon";
 
 interface UploadPageProps {
   onReady: (data: {
@@ -16,7 +16,8 @@ interface UploadPageProps {
 
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const DEMO_CHURN_URL = "/demo/ecommerce_good.csv";
-const DEMO_UPLIFT_URL = "/demo/uplift_campaign_demo.csv";
+const DEMO_UPLIFT_URL = "/demo/hillstrom_uplift_demo.csv";
+const DEMO_SEGMENT_URL = "/demo/online_retail_II_demo.csv";
 
 export default function UploadPage({ onReady }: UploadPageProps) {
   const [file, setFile] = useState<File | null>(null);
@@ -91,8 +92,9 @@ export default function UploadPage({ onReady }: UploadPageProps) {
       <div className="mb-6">
         <h1 className="text-3xl font-semibold tracking-tight">E‑ticaret CSV → doğrulama, plan, job, ML sonuç</h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-          İki portföy demosu: <strong className="text-text">Churn</strong> (işlem satırları) veya{" "}
-          <strong className="text-text">Uplift</strong> (kampanya müşteri satırları). Üstteki 1→9 sırasını izleyin.
+          Üç portföy demosu: <strong className="text-text">Churn</strong>,{" "}
+          <strong className="text-text">Uplift</strong> veya{" "}
+          <strong className="text-text">Segmentasyon</strong> (işlem satırları). Üstteki 1→9 sırasını izleyin.
         </p>
         <p className="mt-2 text-xs text-muted">
           API: <code>POST /ingest/csv</code> → <code>POST /profile/&#123;table_name&#125;</code>
@@ -101,7 +103,12 @@ export default function UploadPage({ onReady }: UploadPageProps) {
 
       <Card className="mx-auto max-w-xl">
         <h2 className="text-xl font-semibold">1. Dataset yükle</h2>
-        <p className="mt-1 text-sm text-muted">Demo seçin veya kendi CSV’nizi yükleyin. Maks. 100MB.</p>
+        <p className="mt-1 text-sm text-muted">
+          Demo seçin veya kendi CSV’nizi yükleyin. Varsayılan: churn →{" "}
+          <code className="text-xs">ecommerce_good.csv</code>, uplift →{" "}
+          <code className="text-xs">hillstrom_uplift_demo.csv</code>, segmentasyon →{" "}
+          <code className="text-xs">online_retail_II_demo.csv</code>. Maks. 100MB.
+        </p>
 
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button
@@ -110,15 +117,23 @@ export default function UploadPage({ onReady }: UploadPageProps) {
             onClick={() => loadDemo(DEMO_CHURN_URL, "ecommerce_good.csv", "churn")}
             disabled={loading}
           >
-            Ecommerce Churn Demo
+            Churn Analizi
           </Button>
           <Button
             type="button"
             variant="ghost"
-            onClick={() => loadDemo(DEMO_UPLIFT_URL, "uplift_campaign_demo.csv", "uplift")}
+            onClick={() => loadDemo(DEMO_UPLIFT_URL, "hillstrom_uplift_demo.csv", "uplift")}
             disabled={loading}
           >
-            Uplift Campaign Demo
+            Uplift Analizi
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => loadDemo(DEMO_SEGMENT_URL, "online_retail_II_demo.csv", "segmentasyon")}
+            disabled={loading}
+          >
+            Segmentasyon
           </Button>
         </div>
 
@@ -138,7 +153,7 @@ export default function UploadPage({ onReady }: UploadPageProps) {
 
         <div className="mt-4 flex items-center justify-between gap-3">
           <Button onClick={handleUpload} loading={loading} disabled={!file}>
-            Yükle ve profille
+            Yükle
           </Button>
           {loading && (
             <div className="flex items-center gap-2 text-sm text-muted">
@@ -155,8 +170,17 @@ export default function UploadPage({ onReady }: UploadPageProps) {
             <p className="text-sm font-medium text-text">Yükleme tamam</p>
             {lastDemo && (
               <p className="mt-1 text-xs text-muted">
-                Demo senaryo: <strong className="text-text">{lastDemo === "uplift" ? "Uplift Campaign" : "Churn"}</strong>
-                {lastDemo === "uplift" && " — sonraki adımda şablon olarak uplift seçin."}
+                Demo senaryo:{" "}
+                <strong className="text-text">
+                  {lastDemo === "uplift"
+                    ? "Uplift"
+                    : lastDemo === "segmentasyon"
+                      ? "Segmentasyon"
+                      : "Churn"}
+                </strong>
+                {lastDemo === "churn" && " — şablon churn olarak ayarlandı."}
+                {lastDemo === "uplift" && " — şablon uplift olarak ayarlandı."}
+                {lastDemo === "segmentasyon" && " — şablon segmentasyon olarak ayarlandı."}
               </p>
             )}
             <ul className="mt-2 space-y-1 font-mono text-xs text-muted">
